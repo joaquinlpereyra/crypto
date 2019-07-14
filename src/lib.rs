@@ -38,24 +38,24 @@ pub mod text {
         let ascii_text: Vec<char> = ascii_text
             .chars()
             .filter(|c| {
-                c.is_ascii_alphabetic()
-                    && !c.is_ascii_punctuation()
+                !c.is_ascii_punctuation()
                     && !c.is_numeric()
                     && c != &' '
                     && c != &'\''
                     && c != &' '
+                    && c != &'\n'
+                    && c != &'\t'
             })
             .map(|c| c.to_ascii_lowercase())
             .collect();
 
-        // count the occurrences of each alphabetic character
-        // and normalize everything to lowercase.
         let mut score = 0.0;
         for letter in &ascii_text {
             score += match letter_by_frequency.get(&letter) {
                 Some(s) => *s as f64,
                 // remove points for every weird character around
-                None => -10 as f64,
+                None if letter.is_ascii_control() => -1000 as f64,
+                None => -1000 as f64,
             }
         }
 
@@ -111,10 +111,10 @@ pub mod bytes {
 
     // Return an UTF8 encoded string from the bytes,
     // if it can.
-    pub fn to_string(bytes: &[u8]) -> String {
+    pub fn to_string(bytes: &[u8]) -> Option<String> {
         match String::from_utf8(bytes.to_owned()) {
-            Ok(s) => s,
-            Err(_) => panic!(),
+            Ok(s) => Some(s),
+            Err(_) => None,
         }
     }
 
