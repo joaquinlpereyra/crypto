@@ -91,22 +91,28 @@ pub mod text {
 }
 
 pub mod bytes {
-    /// XORs all bytes in bigger with smaller.
-    pub fn repeating_xor(bigger: &[u8], smaller: u8) -> Vec<u8> {
+
+    /// XORs all bytes in bigger with smaller, cycling through.
+    /// If `smaller > bigger`, as most of smaller as possible will be xored
+    /// agains bigger, effectively switching places.
+    pub fn repeating_xor(bigger: &[u8], smaller: &[u8]) -> Vec<u8> {
         let mut result = Vec::new();
-        for byte in bigger {
-            result.append(&mut xor(&[*byte], &[smaller]))
+        for (plain_byte, key_byte) in bigger.into_iter().zip(smaller.into_iter().cycle()) {
+            result.append(&mut xor(&[*plain_byte], &[*key_byte]).unwrap())
         }
         result
     }
 
     /// XORs array of bytes of the same size.
-    pub fn xor(x: &[u8], y: &[u8]) -> Vec<u8> {
+    fn xor(x: &[u8], y: &[u8]) -> Option<Vec<u8>> {
+        if x.len() != y.len() {
+            return None;
+        }
         let mut result = vec![0; x.len()];
         for i in 0..x.len() {
             result[i] = x[i] ^ y[i]
         }
-        result
+        Some(result)
     }
 
     // Return an UTF8 encoded string from the bytes,
@@ -126,7 +132,7 @@ pub mod bytes {
         #[test]
         fn test_repeating_xor() {
             assert_eq!(
-                repeating_xor(&[0b01010111, 0b01101001], 0b11110011),
+                repeating_xor(&[0b01010111, 0b01101001], &[0b11110011]),
                 vec![0b10100100, 0b10011010]
             )
         }
@@ -137,7 +143,8 @@ pub mod bytes {
                 xor(
                     &hex::from_string("1c0111001f010100061a024b53535009181c").unwrap(),
                     &hex::from_string("686974207468652062756c6c277320657965").unwrap()
-                ),
+                )
+                .unwrap(),
                 hex::from_string("746865206b696420646f6e277420706c6179").unwrap()
             )
         }
@@ -159,6 +166,10 @@ pub mod hex {
             }
         }
         result
+    }
+
+    pub fn to_string(src: &[u8]) -> String {
+        src.iter().map(|b| format!("{:02X}", b)).collect()
     }
 
     pub fn from_string(src: &str) -> Option<Vec<u8>> {
