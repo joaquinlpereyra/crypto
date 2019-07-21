@@ -195,7 +195,7 @@ pub mod hex {
                 _ => return None,
             }
         }
-        Some(vec)
+        Some(to_bytes(&vec))
     }
 
     // Return an ASCII encoded string from a slice of hex numbers
@@ -221,118 +221,4 @@ pub mod hex {
         }
 
     }
-}
-
-pub mod base64 {
-    use super::hex;
-
-    pub fn from_hex(input: &str) -> Option<Vec<u8>> {
-        // base64 is only specified for octets.
-        // a single hex character is only 4 bits.
-        if input.len() % 2 != 0 {
-            return None;
-        }
-
-        match hex::from_string(input) {
-            Some(vec) => Some(from_raw_hex(&vec)),
-            None => None,
-        }
-    }
-
-    fn from_raw_hex(input: &[u8]) -> Vec<u8> {
-        let table = [
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
-            'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
-            'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
-            'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', '=',
-        ];
-        let mut result = vec![];
-
-        // 24 bits needed, 6 hex.
-        for i in (0..input.len()).step_by(6) {
-            // base64 works in octets. two pairs of hex numbers make an octet
-            // make three of those beautiful bytes. encode_group() will deal
-            // with possibly non-existent bytes.
-            let first_byte = to_byte(input.get(i), input.get(i + 1));
-            let second_byte = to_byte(input.get(i + 2), input.get(i + 3));
-            let third_byte = to_byte(input.get(i + 4), input.get(i + 5));
-
-            for byte in &encode_group(&[first_byte, second_byte, third_byte]) {
-                result.push(table[*byte as usize] as u8)
-            }
-        }
-
-        result
-    }
-
-    fn encode_group(bytes: &[Option<u8>; 3]) -> [u8; 4] {
-        // Warning, here be dragons.
-        // base64 wants you to pad with zeroes, but only the byte needing it.
-        // after that, you should just ouput '='.
-        // that forces you to backtrack and check if the previous byte is present...
-        // even if you already padded it with zeroes.
-        let first = bytes[0].unwrap(); // the first one is always present.
-        let second = bytes[1].unwrap_or(0);
-        let third = bytes[2].unwrap_or(0);
-        let second_is_some = bytes[1].is_some();
-        let third_is_some = bytes[2].is_some();
-
-        // took me only two hours to came with the
-        // simplest mask idea.
-        // this comment is the only place i'll ever admit to it.
-        [
-            (first & 0b_1111_1100) >> 2,
-            (first & 0b_0000_0011) << 4 | (second & 0b_1111_0000) >> 4,
-            match second_is_some {
-                true => (second & 0b_0000_1111) << 2 | (third & 0b_1100_0000) >> 6,
-                _ => 64,
-            },
-            match third_is_some {
-                true => third & 0b_0011_1111,
-                _ => 64,
-            },
-        ]
-    }
-
-    fn to_byte(a: Option<&u8>, b: Option<&u8>) -> Option<u8> {
-        match (a, b) {
-            (Some(a), Some(b)) => Some(hex::to_bytes(&[*a, *b])[0]),
-            (Some(a), None) => Some(hex::to_bytes(&[*a, 0])[0]),
-            _ => None,
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use std::str;
-
-        #[test]
-        fn test_easiest() {
-            assert_eq!(str::from_utf8(&from_hex("FFFFFF").unwrap()), Ok("////"))
-        }
-
-        #[test]
-        fn test_padding_needed() {
-            assert_eq!(
-                str::from_utf8(&from_hex("FFFFFFFF").unwrap()),
-                Ok("/////w==")
-            )
-        }
-
-        #[test]
-        fn test_ultimate() {
-            assert_eq!(str::from_utf8(&from_hex("49276d").unwrap()), Ok("SSdt"));
-        }
-
-        #[test]
-        fn test_the_real_thing() {
-            let input = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
-            assert_eq!(
-                str::from_utf8(&from_hex(input).unwrap()),
-                Ok("SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t")
-            )
-        }
-    }
-
 }
