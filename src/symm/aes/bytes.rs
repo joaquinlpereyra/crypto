@@ -1,5 +1,28 @@
 use std::ops::{Add, Div, Mul, Rem};
 
+// This module is used to create and manipulate
+// bytes in the AES Galoies Field of G(2^8).
+// I got some help from the following pages,
+// which I leave both for you to check out
+// and for myself as reminders.
+// (1) GF arithmetic: https://crypto.stackexchange.com/questions/2700/galois-fields-in-cryptography/2718#2718
+// (2) Finite field arithmetic: https://en.wikipedia.org/wiki/Finite_field_arithmetic
+
+#[derive(Debug)]
+pub struct Bytes {
+    bytes: Vec<Byte>,
+}
+
+impl Bytes {
+    pub fn new(src: &[u8]) -> Bytes {
+        let mut res = Vec::with_capacity(src.len());
+        for s in src {
+            res.push(Byte::new(*s));
+        }
+        Bytes { bytes: res }
+    }
+}
+
 #[derive(Debug)]
 pub struct Byte {
     n: u8,

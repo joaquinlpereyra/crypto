@@ -11,6 +11,10 @@ enum Column {
 #[derive(Debug, PartialEq)]
 pub struct Block([[u8; 4]; 4]);
 
+/// AES blocks have 128 bits of data arranged in a 4 by 4 matrix.
+/// Each position in the matrix holds a byte,
+/// and a 4-byte column is considered a word.
+/// In the AES specification, `Nb` represents the number of bits in a block.
 impl Block {
     /// Return a new uninitialized state
     fn new_blank() -> Block {
