@@ -9,6 +9,24 @@ use std::vec;
 // (1) GF arithmetic: https://crypto.stackexchange.com/questions/2700/galois-fields-in-cryptography/2718#2718
 // (2) Finite field arithmetic: https://en.wikipedia.org/wiki/Finite_field_arithmetic
 
+/// A simple collection of four bytes.
+pub struct Word {
+    bytes: Bytes,
+}
+
+impl Word {
+    pub fn new_from_integer(src: [u8; 4]) -> Word {
+        let bytes = Bytes::new(&src);
+        Word { bytes }
+    }
+
+    pub fn new_from_bytes(src: [Byte; 4]) -> Word {
+        Word {
+            bytes: Bytes::new_from_bytes(src.to_vec()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Bytes {
     bytes: Vec<Byte>,
@@ -21,6 +39,10 @@ impl Bytes {
             res.push(Byte::new(*s));
         }
         Bytes { bytes: res }
+    }
+
+    pub fn new_from_bytes(src: Vec<Byte>) -> Bytes {
+        Bytes { bytes: src }
     }
 
     pub fn len(&self) -> usize {

@@ -1,4 +1,4 @@
-use super::bytes::{Byte, Bytes};
+use super::bytes::{Byte, Bytes, Word};
 use super::constants::SBOX;
 use super::Nb;
 use super::Rounds;
@@ -39,6 +39,10 @@ impl Key {
         }
     }
 
+    /// Return the length of key in BYTES
+    /// The size of the bytearray holding
+    /// the key will be 4*key.len(),
+    /// if god is merciful.
     pub fn len(&self) -> KeyLen {
         match self.bytes.len() {
             4 => KeyLen::Four,
@@ -74,6 +78,10 @@ pub fn key_expansion(key: Key, rounds: Rounds) {
     // "The key expansion generates a total of Nb * (Nr+1) words"
     // FIPS-197 seciont 5.2
     // Nb is the number of bytes in a block, always 16, and Nr the number of rounds.
-    let result = Vec::with_capacity((Nb * rounds as u8) as usize);
-    for byte in key {}
+    let mut result = Vec::with_capacity((Nb * rounds as u8) as usize);
+    let i = 0;
+    while i < key.len() as usize {
+        result[i] =
+            Word::new_from_bytes([key[4 * i], key[4 * i + 1], key[4 * i + 2], key[4 * i + 3]])
+    }
 }
