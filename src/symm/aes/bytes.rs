@@ -1,4 +1,5 @@
-use std::ops::{Add, Div, Mul, Rem};
+use std::ops::{Add, Div, Index, Mul, Rem};
+use std::vec;
 
 // This module is used to create and manipulate
 // bytes in the AES Galoies Field of G(2^8).
@@ -21,9 +22,28 @@ impl Bytes {
         }
         Bytes { bytes: res }
     }
+
+    pub fn len(&self) -> usize {
+        return self.bytes.len();
+    }
 }
 
-#[derive(Debug)]
+impl Index<usize> for Bytes {
+    type Output = Byte;
+    fn index(&self, i: usize) -> &Self::Output {
+        return &self.bytes[i];
+    }
+}
+
+impl IntoIterator for Bytes {
+    type Item = Byte;
+    type IntoIter = vec::IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        return self.bytes.into_iter();
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub struct Byte {
     n: u8,
     polynomial: [u8; 8],

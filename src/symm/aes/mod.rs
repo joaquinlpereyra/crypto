@@ -6,6 +6,8 @@ mod key;
 use block::Block;
 use key::{Key, KeyLen};
 
+static Nb: u8 = 16;
+
 /// There are three possible round setting in AES
 /// They are entirely dependant on the KeyLength,
 /// and are called `Nr` in the AES specification.

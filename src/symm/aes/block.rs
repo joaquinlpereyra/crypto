@@ -14,7 +14,9 @@ pub struct Block([[u8; 4]; 4]);
 /// AES blocks have 128 bits of data arranged in a 4 by 4 matrix.
 /// Each position in the matrix holds a byte,
 /// and a 4-byte column is considered a word.
-/// In the AES specification, `Nb` represents the number of bits in a block.
+/// In the AES specification, `Nb` represents "the number of columns
+/// (32 bits words) comprising the state"
+/// That is, it is always 4.
 impl Block {
     /// Return a new uninitialized state
     fn new_blank() -> Block {
