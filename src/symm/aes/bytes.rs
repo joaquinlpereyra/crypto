@@ -17,10 +17,7 @@ pub enum Endian {
 }
 
 /// A simple collection of four bytes.
-/// The bytes are arranged in little endian
-/// order, but there are several methods on
-/// a Word to pretend it is in big endian
-/// if that's easier for some reason.
+// The bytes are arranged in big endian.
 #[derive(Debug, Clone)]
 pub struct Word {
     bytes: Bytes,
@@ -56,14 +53,6 @@ impl Word {
         }
     }
 
-    /// Gets a byte from the word.
-    /// Acts as if the word is in big endian,
-    /// so the most significant byte will be the
-    /// one at position zero.
-    pub fn get_bg(&self, i: u8) -> Byte {
-        self.bytes.get_bg(i as usize)
-    }
-
     /// Create a new word from a hex string.
     /// The hex string must have
     /// a length of exactly 8.
@@ -71,50 +60,12 @@ impl Word {
         if src.len() != 8 {
             panic!("wrong length for hex string: {}", src);
         }
-        Word::new_raw(Bytes::new_from_hex_string(src))
-    }
-
-    /// Returns a hex string
-    /// representing the word.
-    pub fn to_hex(&self) -> String {
-        self.bytes.to_hex()
-    }
-
-    /// Return a new word filled with zeroes.
-    fn new_zeroed() -> Word {
         Word {
-            bytes: Bytes::new(&[0; 4], Endian::Big),
+            bytes: Bytes::new_from_hex_string(src),
         }
     }
 
-    /// Return a new word from some already
-    /// create bytes.
-    fn new_raw(src: Bytes) -> Word {
-        if src.len() != 4 {
-            panic!("wrong amount of bytes for word, got {}", src.len());
-        }
-        Word { bytes: src }
-    }
-
-    /// Sets a byte, acting as if the word is in big endian.
-    fn set_byte_bg(&mut self, position: u8, new: Byte) {
-        self.bytes.bytes[(4 - position - 1) as usize] = new;
-    }
-
-    /// Rotates a word.
-    pub fn rotword(self) -> Word {
-        Self::new(
-            [
-                self.get_bg(1),
-                self.get_bg(2),
-                self.get_bg(3),
-                self.get_bg(0),
-            ],
-            Endian::Big,
-        )
-    }
-
-    /// Performs the round constant operation on the word.
+    /// Return a new Word from the round constant
     pub fn rcon(i: u8) -> Word {
         let rcon = RCON[(i - 1) as usize];
         Word::new(
@@ -123,11 +74,25 @@ impl Word {
         )
     }
 
+    /// Returns a hex string
+    /// representing the word.
+    pub fn to_hex(&self) -> String {
+        self.bytes.to_hex()
+    }
+
+    fn set_byte(&mut self, position: usize, new_byte: Byte) {
+        self.bytes.bytes[position] = new_byte
+    }
+
+    /// Rotates a word.
+    pub fn rotword(self) -> Word {
+        Self::new([self[1], self[2], self[3], self[0]], Endian::Big)
+    }
+
     /// Creates a new word through the AES sbox.
-    pub fn subword(self) -> Word {
-        let mut word = Word::new_zeroed();
+    pub fn subword(&mut self) -> Word {
         for i in 0..4 {
-            let polynomial = self.get_bg(i).polynomial;
+            let polynomial = self[i].polynomial;
             let x = Byte::new_from_polynomial([
                 polynomial[0],
                 polynomial[1],
@@ -151,9 +116,16 @@ impl Word {
             ])
             .n;
             let substitution = SBOX[y as usize][x as usize];
-            word.set_byte_bg(i as u8, Byte::new(substitution));
+            self.set_byte(i, Byte::new(substitution));
         }
-        word
+        self.clone()
+    }
+}
+
+impl Index<usize> for Word {
+    type Output = Byte;
+    fn index(&self, i: usize) -> &Self::Output {
+        &self.bytes[i]
     }
 }
 
@@ -165,9 +137,9 @@ impl BitXor for Word {
     /// of the two bytes.
     /// See section 2.1.1 of the AES Proposal.
     fn bitxor(self, rhs: Self) -> Self {
-        let mut res = Self::new_zeroed();
+        let mut res = self.clone();
         for i in 0..4 {
-            res.bytes.bytes[i] = self.bytes.bytes[i] + rhs.bytes.bytes[i];
+            res.set_byte(i, res.bytes[i] + rhs.bytes[i]);
         }
         res
     }
@@ -179,10 +151,24 @@ mod tests {
 
     #[test]
     fn test_rotword() {
-        let temp = Word::new_raw(Bytes::new_from_hex_string("09cf4f3c"));
+        let temp = Word::new_from_hex("09cf4f3c");
         assert_eq!(temp.clone().rotword().to_hex(), "cf4f3c09");
+    }
+
+    #[test]
+    fn test_rotword_then_subword() {
+        let temp = Word::new_from_hex("09cf4f3c");
         assert_eq!(temp.clone().rotword().subword().to_hex(), "8a84eb01");
+    }
+
+    #[test]
+    fn test_rcon() {
         assert_eq!(Word::rcon(1).to_hex(), "01000000");
+    }
+
+    #[test]
+    fn test_rotword_then_subword_then_xor() {
+        let temp = Word::new_from_hex("09cf4f3c");
         assert_eq!(
             (temp.clone().rotword().subword() ^ Word::rcon(1)).to_hex(),
             "8b84eb01"
@@ -198,7 +184,7 @@ mod tests {
 }
 
 /// A nice holder for an arbitrary amount of bytes.
-/// NOTE: the bytes are stored in little endian order.
+/// NOTE: the bytes are stored in big endian order.
 /// Number 0x0901 is stored as [0x01, 0x09]
 #[derive(Debug, Clone)]
 pub struct Bytes {
@@ -216,7 +202,7 @@ impl Bytes {
 
     fn new_from_big_endian(src: &[u8]) -> Bytes {
         let mut bytes = Vec::with_capacity(src.len());
-        for s in src.iter().rev() {
+        for s in src {
             bytes.push(Byte::new(*s));
         }
         Bytes { bytes }
@@ -224,19 +210,10 @@ impl Bytes {
 
     fn new_from_little_endian(src: &[u8]) -> Bytes {
         let mut bytes = Vec::with_capacity(src.len());
-        for s in src {
+        for s in src.iter().rev() {
             bytes.push(Byte::new(*s));
         }
         Bytes { bytes }
-    }
-
-    /// Gets a byte from the word.
-    /// Acts as if the word is in big endian,
-    /// so the most significant byte will be the
-    /// one at position zero.
-    pub fn get_bg(&self, i: usize) -> Byte {
-        let target = self.bytes.len() - i - 1;
-        self.bytes[target as usize]
     }
 
     pub fn new_from_array(src: Vec<Byte>, endianess: Endian) -> Bytes {
@@ -260,8 +237,10 @@ impl Bytes {
 
     pub fn to_hex(&self) -> String {
         let mut hex = String::new();
-        for byte in self.bytes.iter().rev() {
-            write!(&mut hex, "{:02x}", byte.n);
+        for byte in &self.bytes {
+            if let Err(_) = write!(&mut hex, "{:02x}", byte.n) {
+                panic!("could not write to stdout.")
+            }
         }
         hex
     }
@@ -301,7 +280,7 @@ impl Byte {
 
     /// Create a new AES byte from an array of bits.
     /// The array is expected in little endian.
-    pub fn new_from_polynomial(polynomial: [u8; 8]) -> Self {
+    fn new_from_polynomial(polynomial: [u8; 8]) -> Self {
         Self {
             n: Self::make_number(&polynomial) as u8,
             polynomial: polynomial,

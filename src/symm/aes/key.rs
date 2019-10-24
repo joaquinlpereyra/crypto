@@ -26,12 +26,7 @@ impl Key {
         let mut words = Vec::with_capacity((Nb * (rounds + 1)) as usize);
         let key_length = key.len() as u8 / 4;
         while i < key_length as usize {
-            let bytes = [
-                key.get_bg(4 * i),
-                key.get_bg(4 * i + 1),
-                key.get_bg(4 * i + 2),
-                key.get_bg(4 * i + 3),
-            ];
+            let bytes = [key[4 * i], key[4 * i + 1], key[4 * i + 2], key[4 * i + 3]];
             let word = Word::new(bytes, Endian::Big);
             words.push(word);
             i += 1;
