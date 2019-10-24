@@ -76,7 +76,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_key_expansion() {
+    fn test_key_expansion_128_bits() {
         let key = "2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c";
         let bytes = Bytes::new_from_hex_string(key);
         let key = Key::new(bytes, 10).unwrap();
@@ -85,6 +85,34 @@ mod tests {
         assert_eq!(key.words[8].to_hex(), "f2c295f2");
         assert_eq!(key.words[20].to_hex(), "d4d1c6f8");
         assert_eq!(key.words[43].to_hex(), "b6630ca6");
+    }
+
+    #[test]
+    fn test_key_expansion_192_bits() {
+        let key = "8e 73 b0 f7 da 0e 64 52 c8 10 f3 2b 80 90 79 e5 62 f8 ea d2 52 2c 6b 7b";
+        let bytes = Bytes::new_from_hex_string(key);
+        let key = Key::new(bytes, 12).unwrap();
+        assert_eq!(key.len(), 4 * 13, "key length is wrong");
+        assert_eq!(key.words[6].to_hex(), "fe0c91f7");
+        assert_eq!(key.words[8].to_hex(), "ec12068e");
+        assert_eq!(key.words[20].to_hex(), "a448f6d9");
+        assert_eq!(key.words[43].to_hex(), "ad07d753");
+        assert_eq!(key.words[51].to_hex(), "01002202");
+    }
+
+    #[test]
+    fn test_key_expansion_256_bits() {
+        let key = "
+60 3d eb 10 15 ca 71 be 2b 73 ae f0 85 7d 77 81
+1f 35 2c 07 3b 61 08 d7 2d 98 10 a3 09 14 df f4";
+        let bytes = Bytes::new_from_hex_string(key);
+        let key = Key::new(bytes, 14).unwrap();
+        assert_eq!(key.len(), 4 * 15, "key length is wrong");
+        assert_eq!(key.words[8].to_hex(), "9ba35411");
+        assert_eq!(key.words[20].to_hex(), "b5a9328a");
+        assert_eq!(key.words[43].to_hex(), "9674ee15");
+        assert_eq!(key.words[51].to_hex(), "7401905a");
+        assert_eq!(key.words[59].to_hex(), "706c631e");
     }
 
 }
