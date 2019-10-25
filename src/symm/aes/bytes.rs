@@ -37,10 +37,10 @@ impl Block {
     fn new_blank() -> Block {
         Block {
             columns: [
-                Word::new_from_hex("00"),
-                Word::new_from_hex("00"),
-                Word::new_from_hex("00"),
-                Word::new_from_hex("00"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
             ],
         }
     }
@@ -53,10 +53,10 @@ impl Block {
 
     pub fn new_from_u8(numbers: [[u8; 4]; 4]) -> Block {
         let mut columns = [
-            Word::new_from_hex("00"),
-            Word::new_from_hex("00"),
-            Word::new_from_hex("00"),
-            Word::new_from_hex("00"),
+            Word::new_from_hex("00000000"),
+            Word::new_from_hex("00000000"),
+            Word::new_from_hex("00000000"),
+            Word::new_from_hex("00000000"),
         ];
         for (i, clm) in numbers.iter().enumerate() {
             let word = Word::new_from_numbers(&clm, Endian::Big);
@@ -92,10 +92,10 @@ impl BitXor for Block {
 
     fn bitxor(self, rhs: Self) -> Self::Output {
         let mut xored_words = [
-            Word::new_from_hex("0"),
-            Word::new_from_hex("0"),
-            Word::new_from_hex("0"),
-            Word::new_from_hex("0"),
+            Word::new_from_hex("00000000"),
+            Word::new_from_hex("00000000"),
+            Word::new_from_hex("00000000"),
+            Word::new_from_hex("00000000"),
         ];
         for i in 0..4 {
             let xor = self.get_column_from_int(i) ^ rhs.get_column_from_int(i);
@@ -128,6 +128,29 @@ mod tests {
             Word::new_from_hex("05060708"),
             block.get_column(Column::Second)
         );
+    }
+
+    #[test]
+    fn test_xor_two_blocks() {
+        let one = Block::new([
+            Word::new_from_hex("aaaa0000"),
+            Word::new_from_hex("aaaa0000"),
+            Word::new_from_hex("aaaa0000"),
+            Word::new_from_hex("aaaa0000"),
+        ]);
+        let two = Block::new([
+            Word::new_from_hex("0000aaaa"),
+            Word::new_from_hex("0000aaaa"),
+            Word::new_from_hex("0000aaaa"),
+            Word::new_from_hex("0000aaaa"),
+        ]);
+        let expected = Block::new([
+            Word::new_from_hex("aaaaaaaa"),
+            Word::new_from_hex("aaaaaaaa"),
+            Word::new_from_hex("aaaaaaaa"),
+            Word::new_from_hex("aaaaaaaa"),
+        ]);
+        assert_eq!(one ^ two, expected);
     }
 }
 
@@ -275,7 +298,7 @@ impl BitXor for Word {
     fn bitxor(self, rhs: Self) -> Self {
         let mut res = self.clone();
         for i in 0..4 {
-            res.set_byte(i, res.bytes[i] + rhs.bytes[i]);
+            res.set_byte(i, self.bytes[i] + rhs.bytes[i]);
         }
         res
     }

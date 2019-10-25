@@ -1,5 +1,6 @@
 use super::bytes::{Bytes, Endian, Word};
 use super::Nb;
+use std::fmt::Write;
 use std::ops::Index;
 use std::vec;
 
@@ -52,6 +53,16 @@ impl Key {
 
     pub fn len(&self) -> u8 {
         self.words.len() as u8
+    }
+
+    pub fn to_hex(&self) -> String {
+        let mut hex = String::new();
+        for word in &self.words {
+            if let Err(_) = write!(hex, "{}", word.to_hex()) {
+                panic!("could not write to stdout.")
+            }
+        }
+        hex
     }
 }
 
