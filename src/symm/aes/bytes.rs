@@ -4,13 +4,134 @@ use std::ops::{Add, BitXor, Div, Index, Mul, Rem};
 use std::vec;
 
 // This module is used to create and manipulate
-// bytes in the AES Galoies Field of G(2^8).
+// bytes, words and other data structures
+// in the AES Galoies Field of G(2^8).
 // I got some help from the following pages,
 // which I leave both for you to check out
 // and for myself as reminders.
 // (1) GF arithmetic: https://crypto.stackexchange.com/questions/2700/galois-fields-in-cryptography/2718#2718
 // (2) Finite field arithmetic: https://en.wikipedia.org/wiki/Finite_field_arithmetic
 
+#[derive(Clone, Copy, Debug)]
+enum Column {
+    First = 0,
+    Second = 1,
+    Third = 2,
+    Fourth = 3,
+}
+
+// A block is a 4x4 matrix of bytes
+#[derive(Debug, PartialEq, Clone)]
+pub struct Block {
+    columns: [Word; 4],
+}
+
+/// AES blocks have 128 bits of data arranged in a 4 by 4 matrix.
+/// Each position in the matrix holds a byte,
+/// and a 4-byte column is considered a word.
+/// In the AES specification, `Nb` represents "the number of columns
+/// (32 bits words) comprising the state"
+/// That is, it is always 4.
+impl Block {
+    /// Return a new uninitialized state
+    fn new_blank() -> Block {
+        Block {
+            columns: [
+                Word::new_from_hex("00"),
+                Word::new_from_hex("00"),
+                Word::new_from_hex("00"),
+                Word::new_from_hex("00"),
+            ],
+        }
+    }
+
+    /// Return a new block with the data given.
+    /// The order of the columns will be respected.
+    pub fn new(columns: [Word; 4]) -> Block {
+        Self { columns }
+    }
+
+    pub fn new_from_u8(numbers: [[u8; 4]; 4]) -> Block {
+        let mut columns = [
+            Word::new_from_hex("00"),
+            Word::new_from_hex("00"),
+            Word::new_from_hex("00"),
+            Word::new_from_hex("00"),
+        ];
+        for (i, clm) in numbers.iter().enumerate() {
+            let word = Word::new_from_numbers(&clm, Endian::Big);
+            columns[i] = word;
+        }
+        Block { columns }
+    }
+
+    /// Set a new value in the state
+    fn set(&mut self, x: Column, y: usize, value: u8) {
+        let clm = &self.columns[x as usize];
+        let mut new_column = clm.clone();
+        new_column.set_byte(y, Byte::new(value));
+        self.columns[x as usize] = new_column;
+    }
+
+    /// Retrieve a value from the state
+    fn get(&self, x: Column, y: usize) -> Byte {
+        self.columns[x as usize][y]
+    }
+
+    pub fn get_column(&self, clm: Column) -> Word {
+        self.columns[clm as usize].clone()
+    }
+
+    fn get_column_from_int(&self, i: usize) -> Word {
+        self.columns[i].clone()
+    }
+}
+
+impl BitXor for Block {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        let mut xored_words = [
+            Word::new_from_hex("0"),
+            Word::new_from_hex("0"),
+            Word::new_from_hex("0"),
+            Word::new_from_hex("0"),
+        ];
+        for i in 0..4 {
+            let xor = self.get_column_from_int(i) ^ rhs.get_column_from_int(i);
+            xored_words[i] = xor;
+        }
+        Self::new(xored_words)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_and_get_block() {
+        let mut s = Block::new_blank();
+        s.set(Column::First, 1, 2);
+        assert_eq!(Byte::new(2), s.get(Column::First, 1));
+    }
+
+    #[test]
+    fn test_get_column() {
+        let block = Block::new([
+            Word::new_from_hex("01020304"),
+            Word::new_from_hex("05060708"),
+            Word::new_from_hex("090a0b0c"),
+            Word::new_from_hex("0d0e0f00"),
+        ]);
+        assert_eq!(
+            Word::new_from_hex("05060708"),
+            block.get_column(Column::Second)
+        );
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum Endian {
     Big,
     Little,
@@ -50,6 +171,15 @@ impl Word {
     fn new_from_little_endian(src: [Byte; 4]) -> Word {
         Word {
             bytes: Bytes::new_from_array(src.to_vec(), Endian::Little),
+        }
+    }
+
+    pub fn new_from_numbers(src: &[u8; 4], endianess: Endian) -> Word {
+        let src_bytes = Bytes::new(src, endianess);
+        let src_bytes = [src_bytes[0], src_bytes[1], src_bytes[2], src_bytes[3]];
+        match endianess {
+            Endian::Big => Self::new_from_big_endian(src_bytes),
+            Endian::Little => Self::new_from_little_endian(src_bytes),
         }
     }
 
@@ -122,6 +252,12 @@ impl Word {
     }
 }
 
+impl PartialEq for Word {
+    fn eq(&self, another: &Self) -> bool {
+        self.bytes == another.bytes
+    }
+}
+
 impl Index<usize> for Word {
     type Output = Byte;
     fn index(&self, i: usize) -> &Self::Output {
@@ -146,7 +282,7 @@ impl BitXor for Word {
 }
 
 #[cfg(test)]
-mod tests {
+mod test_word {
     use super::*;
 
     #[test]
@@ -177,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_hex() {
-        let one = Bytes::new_from_hex_string("09cf4f3c");
+        let one = Word::new_from_hex("09cf4f3c");
         assert_eq!(one.to_hex(), "09cf4f3c");
     }
 
@@ -247,6 +383,12 @@ impl Bytes {
 
     pub fn len(&self) -> usize {
         return self.bytes.len();
+    }
+}
+
+impl PartialEq for Bytes {
+    fn eq(&self, another: &Self) -> bool {
+        self.bytes == another.bytes
     }
 }
 
@@ -402,6 +544,12 @@ impl Mul for Byte {
         let mx = [1, 1, 0, 1, 1, 0, 0, 0, 1];
         let (_, remainder) = Self::divide(&mult, &mx);
         Self::new(remainder as u8)
+    }
+}
+
+impl PartialEq for Byte {
+    fn eq(&self, another: &Self) -> bool {
+        self.n == another.n
     }
 }
 
