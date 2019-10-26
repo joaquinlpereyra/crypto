@@ -1,5 +1,6 @@
-mod encoding;
-mod symm;
+pub mod encoding;
+pub mod symm;
+
 pub mod text {
     use std::collections::HashMap;
     type Score = f32;

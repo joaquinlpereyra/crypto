@@ -1,5 +1,5 @@
 use super::constants::{RCON, SBOX};
-use std::fmt::Write;
+use std::fmt::{self, Debug, Write};
 use std::ops::{Add, BitXor, Div, Index, Mul, Rem};
 use std::vec;
 
@@ -12,16 +12,8 @@ use std::vec;
 // (1) GF arithmetic: https://crypto.stackexchange.com/questions/2700/galois-fields-in-cryptography/2718#2718
 // (2) Finite field arithmetic: https://en.wikipedia.org/wiki/Finite_field_arithmetic
 
-#[derive(Clone, Copy, Debug)]
-enum Column {
-    First = 0,
-    Second = 1,
-    Third = 2,
-    Fourth = 3,
-}
-
 // A block is a 4x4 matrix of bytes
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Block {
     columns: [Word; 4],
 }
@@ -34,7 +26,7 @@ pub struct Block {
 /// That is, it is always 4.
 impl Block {
     /// Return a new uninitialized state
-    fn new_blank() -> Block {
+    pub fn new_blank() -> Block {
         Block {
             columns: [
                 Word::new_from_hex("00000000"),
@@ -66,7 +58,7 @@ impl Block {
     }
 
     /// Set a new value in the state
-    fn set(&mut self, x: Column, y: usize, value: u8) {
+    fn set(&mut self, x: usize, y: usize, value: u8) {
         let clm = &self.columns[x as usize];
         let mut new_column = clm.clone();
         new_column.set_byte(y, Byte::new(value));
@@ -74,12 +66,16 @@ impl Block {
     }
 
     /// Retrieve a value from the state
-    fn get(&self, x: Column, y: usize) -> Byte {
+    fn get(&self, x: usize, y: usize) -> Byte {
         self.columns[x as usize][y]
     }
 
-    pub fn get_column(&self, clm: Column) -> Word {
-        self.columns[clm as usize].clone()
+    fn get_column(self, clm: usize) -> Word {
+        self.columns[clm].clone()
+    }
+
+    pub fn get_columns(&self) -> [Word; 4] {
+        self.columns.clone()
     }
 
     fn get_column_from_int(&self, i: usize) -> Word {
@@ -105,6 +101,19 @@ impl BitXor for Block {
     }
 }
 
+impl Debug for Block {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "\nclm1: {}\nclm2: {}\nclm3: {}\nclm4: {}\n",
+            self.columns[0].to_hex(),
+            self.columns[1].to_hex(),
+            self.columns[2].to_hex(),
+            self.columns[3].to_hex(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,8 +121,8 @@ mod tests {
     #[test]
     fn test_set_and_get_block() {
         let mut s = Block::new_blank();
-        s.set(Column::First, 1, 2);
-        assert_eq!(Byte::new(2), s.get(Column::First, 1));
+        s.set(0, 1, 2);
+        assert_eq!(Byte::new(2), s.get(0, 1));
     }
 
     #[test]
@@ -124,10 +133,7 @@ mod tests {
             Word::new_from_hex("090a0b0c"),
             Word::new_from_hex("0d0e0f00"),
         ]);
-        assert_eq!(
-            Word::new_from_hex("05060708"),
-            block.get_column(Column::Second)
-        );
+        assert_eq!(Word::new_from_hex("05060708"), block.get_column(1));
     }
 
     #[test]
@@ -233,7 +239,7 @@ impl Word {
         self.bytes.to_hex()
     }
 
-    fn set_byte(&mut self, position: usize, new_byte: Byte) {
+    pub fn set_byte(&mut self, position: usize, new_byte: Byte) {
         self.bytes.bytes[position] = new_byte
     }
 
@@ -452,6 +458,10 @@ impl Byte {
         }
     }
 
+    pub fn get_number(&self) -> u8 {
+        self.n
+    }
+
     /// Returns the binary representation of a number
     /// in little-endian format.
     fn make_polynomial(n: u8) -> [u8; 8] {
@@ -481,7 +491,7 @@ impl Byte {
     /// Gets the position of the most significant bit from an slice
     /// of bits in big endian.
     fn most_significant(polynomial: &[u8]) -> u8 {
-        (polynomial.len() - polynomial.iter().rev().position(|b| *b == 1).unwrap_or(0)) as u8
+        polynomial.len() as u8 - polynomial.iter().rev().position(|b| *b == 1).unwrap_or(0) as u8
     }
 
     /// Divides and returns the result and the remainder.
@@ -489,8 +499,15 @@ impl Byte {
     /// NOTE: both arguments must be passed in little endian
     /// [1] https://en.wikipedia.org/wiki/Finite_field_arithmetic#Rijndael.27s_finite_field
     fn divide(polynomial: &[u8], by: &[u8]) -> (u8, u8) {
-        // the shift makes the divisor aligned with the dividend
-        let diff = Self::most_significant(polynomial) - Self::most_significant(by);
+        // check for an already reduced polynomial,
+        let most_significant_polynomial = Self::most_significant(polynomial);
+        let most_significant_by = Self::most_significant(by);
+        if most_significant_polynomial < most_significant_by {
+            return (0, Self::make_number(&polynomial) as u8);
+        }
+
+        // this shift makes the divisor aligned with the dividend
+        let diff = most_significant_polynomial - most_significant_by;
         let mut divisor = Self::make_number(by) << diff;
         let mut remainder = Self::make_number(polynomial);
 
@@ -564,7 +581,9 @@ impl Mul for Byte {
                 }
             }
         }
+
         let mx = [1, 1, 0, 1, 1, 0, 0, 0, 1];
+
         let (_, remainder) = Self::divide(&mult, &mx);
         Self::new(remainder as u8)
     }
