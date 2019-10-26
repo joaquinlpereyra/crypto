@@ -26,17 +26,6 @@ pub struct Block {
 /// That is, it is always 4.
 impl Block {
     /// Return a new uninitialized state
-    pub fn new_blank() -> Block {
-        Block {
-            columns: [
-                Word::new_from_hex("00000000"),
-                Word::new_from_hex("00000000"),
-                Word::new_from_hex("00000000"),
-                Word::new_from_hex("00000000"),
-            ],
-        }
-    }
-
     /// Return a new block with the data given.
     /// The order of the columns will be respected.
     pub fn new(columns: [Word; 4]) -> Block {
@@ -70,15 +59,11 @@ impl Block {
         self.columns[x as usize][y]
     }
 
-    fn get_column(self, clm: usize) -> Word {
-        self.columns[clm].clone()
-    }
-
     pub fn get_columns(&self) -> [Word; 4] {
         self.columns.clone()
     }
 
-    fn get_column_from_int(&self, i: usize) -> Word {
+    fn get_column(&self, i: usize) -> Word {
         self.columns[i].clone()
     }
 }
@@ -94,7 +79,7 @@ impl BitXor for Block {
             Word::new_from_hex("00000000"),
         ];
         for i in 0..4 {
-            let xor = self.get_column_from_int(i) ^ rhs.get_column_from_int(i);
+            let xor = self.get_column(i) ^ rhs.get_column(i);
             xored_words[i] = xor;
         }
         Self::new(xored_words)
@@ -120,7 +105,14 @@ mod tests {
 
     #[test]
     fn test_set_and_get_block() {
-        let mut s = Block::new_blank();
+        let mut s = Block {
+            columns: [
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+            ],
+        };
         s.set(0, 1, 2);
         assert_eq!(Byte::new(2), s.get(0, 1));
     }
