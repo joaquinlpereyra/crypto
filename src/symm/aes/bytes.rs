@@ -12,38 +12,66 @@ use std::vec;
 // (1) GF arithmetic: https://crypto.stackexchange.com/questions/2700/galois-fields-in-cryptography/2718#2718
 // (2) Finite field arithmetic: https://en.wikipedia.org/wiki/Finite_field_arithmetic
 
-// A block is a 4x4 matrix of bytes
+/// The number of columns on a block.
+/// Absolutely always four.
+pub static NB: u8 = 4;
+
+/// A block is a 4x4 matrix of words.
+/// It is generally addresses by column.
 #[derive(PartialEq, Clone)]
 pub struct Block {
     columns: [Word; 4],
 }
 
-/// AES blocks have 128 bits of data arranged in a 4 by 4 matrix.
-/// Each position in the matrix holds a byte,
-/// and a 4-byte column is considered a word.
-/// In the AES specification, `Nb` represents "the number of columns
-/// (32 bits words) comprising the state"
-/// That is, it is always 4.
 impl Block {
-    /// Return a new uninitialized state
     /// Return a new block with the data given.
     /// The order of the columns will be respected.
     pub fn new(columns: [Word; 4]) -> Block {
         Self { columns }
     }
 
+    /// Return a new block from the matrix given.
+    /// Each inner array represents a column.
     pub fn new_from_u8(numbers: [[u8; 4]; 4]) -> Block {
-        let mut columns = [
-            Word::new_from_hex("00000000"),
-            Word::new_from_hex("00000000"),
-            Word::new_from_hex("00000000"),
-            Word::new_from_hex("00000000"),
-        ];
+        let mut zero = Self::zero();
         for (i, clm) in numbers.iter().enumerate() {
             let word = Word::new_from_numbers(&clm, Endian::Big);
-            columns[i] = word;
+            zero.columns[i] = word;
         }
-        Block { columns }
+        zero
+    }
+
+    /// Return the new _zero_ block.
+    fn zero() -> Block {
+        Block {
+            columns: [Word::zero(), Word::zero(), Word::zero(), Word::zero()],
+        }
+    }
+
+    /// Clone the columns of the block.
+    pub fn clone_columns(&self) -> [Word; 4] {
+        self.columns.clone()
+    }
+
+    /// Returns a flattened array of bytes
+    pub fn flatten(&self) -> [Byte; 16] {
+        let mut bytes = Vec::new();
+        for clm in &self.columns.clone() {
+            for i in 0..4 {
+                bytes.push(clm[i])
+            }
+        }
+        let mut arr = [Byte::new(0); 16];
+        arr.copy_from_slice(&bytes);
+        arr
+    }
+
+    /// Returns a flattened array of bytes
+    pub fn flatten_into_u8(&self) -> [u8; 16] {
+        let numbers: Vec<u8> = self.flatten().into_iter().map(|b| b.get_number()).collect();
+        let mut arr = [0; 16];
+        arr.copy_from_slice(&numbers);
+        arr
     }
 
     /// Set a new value in the state
@@ -59,10 +87,6 @@ impl Block {
         self.columns[x as usize][y]
     }
 
-    pub fn get_columns(&self) -> [Word; 4] {
-        self.columns.clone()
-    }
-
     fn get_column(&self, i: usize) -> Word {
         self.columns[i].clone()
     }
@@ -72,17 +96,12 @@ impl BitXor for Block {
     type Output = Self;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
-        let mut xored_words = [
-            Word::new_from_hex("00000000"),
-            Word::new_from_hex("00000000"),
-            Word::new_from_hex("00000000"),
-            Word::new_from_hex("00000000"),
-        ];
+        let mut block = Block::zero();
         for i in 0..4 {
             let xor = self.get_column(i) ^ rhs.get_column(i);
-            xored_words[i] = xor;
+            block.columns[i] = xor;
         }
-        Self::new(xored_words)
+        block
     }
 }
 
@@ -96,59 +115,6 @@ impl Debug for Block {
             self.columns[2].to_hex(),
             self.columns[3].to_hex(),
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_set_and_get_block() {
-        let mut s = Block {
-            columns: [
-                Word::new_from_hex("00000000"),
-                Word::new_from_hex("00000000"),
-                Word::new_from_hex("00000000"),
-                Word::new_from_hex("00000000"),
-            ],
-        };
-        s.set(0, 1, 2);
-        assert_eq!(Byte::new(2), s.get(0, 1));
-    }
-
-    #[test]
-    fn test_get_column() {
-        let block = Block::new([
-            Word::new_from_hex("01020304"),
-            Word::new_from_hex("05060708"),
-            Word::new_from_hex("090a0b0c"),
-            Word::new_from_hex("0d0e0f00"),
-        ]);
-        assert_eq!(Word::new_from_hex("05060708"), block.get_column(1));
-    }
-
-    #[test]
-    fn test_xor_two_blocks() {
-        let one = Block::new([
-            Word::new_from_hex("aaaa0000"),
-            Word::new_from_hex("aaaa0000"),
-            Word::new_from_hex("aaaa0000"),
-            Word::new_from_hex("aaaa0000"),
-        ]);
-        let two = Block::new([
-            Word::new_from_hex("0000aaaa"),
-            Word::new_from_hex("0000aaaa"),
-            Word::new_from_hex("0000aaaa"),
-            Word::new_from_hex("0000aaaa"),
-        ]);
-        let expected = Block::new([
-            Word::new_from_hex("aaaaaaaa"),
-            Word::new_from_hex("aaaaaaaa"),
-            Word::new_from_hex("aaaaaaaa"),
-            Word::new_from_hex("aaaaaaaa"),
-        ]);
-        assert_eq!(one ^ two, expected);
     }
 }
 
@@ -174,6 +140,13 @@ impl Word {
         match endianness {
             Endian::Big => Self::new_from_big_endian(src),
             Endian::Little => Self::new_from_little_endian(src),
+        }
+    }
+
+    /// Creat a zero word
+    pub fn zero() -> Word {
+        Word {
+            bytes: Bytes::new(&[0], Endian::Big),
         }
     }
 
@@ -231,6 +204,7 @@ impl Word {
         self.bytes.to_hex()
     }
 
+    /// Sets a byte at a certain position to a new value.
     pub fn set_byte(&mut self, position: usize, new_byte: Byte) {
         self.bytes.bytes[position] = new_byte
     }
@@ -300,44 +274,6 @@ impl BitXor for Word {
         }
         res
     }
-}
-
-#[cfg(test)]
-mod test_word {
-    use super::*;
-
-    #[test]
-    fn test_rotword() {
-        let temp = Word::new_from_hex("09cf4f3c");
-        assert_eq!(temp.clone().rotword().to_hex(), "cf4f3c09");
-    }
-
-    #[test]
-    fn test_rotword_then_subword() {
-        let temp = Word::new_from_hex("09cf4f3c");
-        assert_eq!(temp.clone().rotword().subword().to_hex(), "8a84eb01");
-    }
-
-    #[test]
-    fn test_rcon() {
-        assert_eq!(Word::rcon(1).to_hex(), "01000000");
-    }
-
-    #[test]
-    fn test_rotword_then_subword_then_xor() {
-        let temp = Word::new_from_hex("09cf4f3c");
-        assert_eq!(
-            (temp.clone().rotword().subword() ^ Word::rcon(1)).to_hex(),
-            "8b84eb01"
-        );
-    }
-
-    #[test]
-    fn test_hex() {
-        let one = Word::new_from_hex("09cf4f3c");
-        assert_eq!(one.to_hex(), "09cf4f3c");
-    }
-
 }
 
 /// A nice holder for an arbitrary amount of bytes.
@@ -627,4 +563,83 @@ mod test {
         assert_eq!(result.1, 0x01)
     }
 
+    #[test]
+    fn test_rotword() {
+        let temp = Word::new_from_hex("09cf4f3c");
+        assert_eq!(temp.clone().rotword().to_hex(), "cf4f3c09");
+    }
+
+    #[test]
+    fn test_rotword_then_subword() {
+        let temp = Word::new_from_hex("09cf4f3c");
+        assert_eq!(temp.clone().rotword().subword().to_hex(), "8a84eb01");
+    }
+
+    #[test]
+    fn test_rcon() {
+        assert_eq!(Word::rcon(1).to_hex(), "01000000");
+    }
+
+    #[test]
+    fn test_rotword_then_subword_then_xor() {
+        let temp = Word::new_from_hex("09cf4f3c");
+        assert_eq!(
+            (temp.clone().rotword().subword() ^ Word::rcon(1)).to_hex(),
+            "8b84eb01"
+        );
+    }
+
+    #[test]
+    fn test_hex() {
+        let one = Word::new_from_hex("09cf4f3c");
+        assert_eq!(one.to_hex(), "09cf4f3c");
+    }
+
+    #[test]
+    fn test_set_and_get_block() {
+        let mut s = Block {
+            columns: [
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+                Word::new_from_hex("00000000"),
+            ],
+        };
+        s.set(0, 1, 2);
+        assert_eq!(Byte::new(2), s.get(0, 1));
+    }
+
+    #[test]
+    fn test_get_column() {
+        let block = Block::new([
+            Word::new_from_hex("01020304"),
+            Word::new_from_hex("05060708"),
+            Word::new_from_hex("090a0b0c"),
+            Word::new_from_hex("0d0e0f00"),
+        ]);
+        assert_eq!(Word::new_from_hex("05060708"), block.get_column(1));
+    }
+
+    #[test]
+    fn test_xor_two_blocks() {
+        let one = Block::new([
+            Word::new_from_hex("aaaa0000"),
+            Word::new_from_hex("aaaa0000"),
+            Word::new_from_hex("aaaa0000"),
+            Word::new_from_hex("aaaa0000"),
+        ]);
+        let two = Block::new([
+            Word::new_from_hex("0000aaaa"),
+            Word::new_from_hex("0000aaaa"),
+            Word::new_from_hex("0000aaaa"),
+            Word::new_from_hex("0000aaaa"),
+        ]);
+        let expected = Block::new([
+            Word::new_from_hex("aaaaaaaa"),
+            Word::new_from_hex("aaaaaaaa"),
+            Word::new_from_hex("aaaaaaaa"),
+            Word::new_from_hex("aaaaaaaa"),
+        ]);
+        assert_eq!(one ^ two, expected);
+    }
 }

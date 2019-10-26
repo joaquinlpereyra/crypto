@@ -1,5 +1,4 @@
-use super::bytes::{Bytes, Endian, Word};
-use super::Nb;
+use super::bytes::{Bytes, Endian, Word, NB};
 use std::fmt::Write;
 use std::ops::Index;
 use std::vec;
@@ -24,7 +23,7 @@ impl Key {
         // FIPS-197 seciont 5.2
         // Nb is the number of columns in a block, always 4, and Nr the number of rounds.
         let mut i = 0 as usize;
-        let mut words = Vec::with_capacity((Nb * (rounds + 1)) as usize);
+        let mut words = Vec::with_capacity((NB * (rounds + 1)) as usize);
         let key_length = key.len() as u8 / 4;
         while i < key_length as usize {
             let bytes = [key[4 * i], key[4 * i + 1], key[4 * i + 2], key[4 * i + 3]];
@@ -34,7 +33,7 @@ impl Key {
         }
         assert!(i == key_length as usize);
 
-        while i < (Nb * (rounds + 1)) as usize {
+        while i < (NB * (rounds + 1)) as usize {
             let mut temp = words[i - 1].clone();
             if i as u8 % key_length == 0 {
                 temp = temp.rotword().subword() ^ Word::rcon(i as u8 / key_length);
@@ -47,7 +46,7 @@ impl Key {
             words.push(new_word);
             i += 1;
         }
-        assert!(words.len() == (Nb * (rounds + 1)) as usize);
+        assert!(words.len() == (NB * (rounds + 1)) as usize);
         words
     }
 
