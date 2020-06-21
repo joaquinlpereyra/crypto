@@ -1,8 +1,56 @@
 mod aes;
-mod modes;
+pub mod modes;
 pub mod padding;
+use crate::hex;
 
 use aes::Cipher;
+use modes::Mode;
+
+pub fn encrypt(key: &str, plain_text: &str, mode: Mode) -> String {
+    match mode {
+        Mode::None => encrypt_hex(key, plain_text),
+        Mode::ECB => encrypt_hex_with_ecb(key, plain_text),
+    }
+}
+
+pub fn decrypt(key: &str, plain_text: &str, mode: Mode) -> String {
+    match mode {
+        Mode::None => decrypt_hex(key, plain_text),
+        Mode::ECB => decrypt_hex_with_ecb(key, plain_text),
+    }
+}
+
+fn encrypt_hex(key: &str, plain_text: &str) -> String {
+    let mut cipher = Cipher::new_from_hex(key, plain_text);
+    let cipher_text = cipher.encrypt_to_hex();
+
+    cipher_text
+}
+
+fn encrypt_hex_with_ecb(key: &str, plain_text: &str) -> String {
+    let key_bytes = hex::from_string(key).expect("invalid key given");
+    let plain_bytes = hex::from_string(plain_text).expect("uneven hex string given");
+    let mut cipher = Cipher::new_blank(&key_bytes);
+    let mut ecb = modes::ECB::new(&mut cipher);
+
+    hex::to_string(&ecb.encrypt(&plain_bytes))
+}
+
+fn decrypt_hex_with_ecb(key: &str, cipher_text: &str) -> String {
+    let key_bytes = hex::from_string(key).expect("invalid key given");
+    let cipher_bytes = hex::from_string(cipher_text).expect("uneven hex string given");
+    let mut cipher = Cipher::new_blank(&key_bytes);
+    let mut ecb = modes::ECB::new(&mut cipher);
+
+    hex::to_string(&ecb.decrypt(&cipher_bytes))
+}
+
+pub fn decrypt_hex(key: &str, cipher_text: &str) -> String {
+    let mut cipher = Cipher::new_from_hex(key, cipher_text);
+    let decryption = cipher.decrypt_hex();
+
+    decryption
+}
 
 pub fn encrypt_raw(key: &[u8], plain_text: &[u8; 16]) -> [u8; 16] {
     let mut cipher = Cipher::new(key, plain_text);
@@ -11,23 +59,9 @@ pub fn encrypt_raw(key: &[u8], plain_text: &[u8; 16]) -> [u8; 16] {
     cipher_text
 }
 
-pub fn encrypt_hex(key: &str, plain_text: &str) -> String {
-    let mut cipher = Cipher::new_from_hex(key, plain_text);
-    let cipher_text = cipher.encrypt_to_hex();
-
-    cipher_text
-}
-
 pub fn decrypt_raw(key: &[u8], cipher_text: &[u8; 16]) -> [u8; 16] {
     let mut cipher = Cipher::new(key, cipher_text);
     let decryption = cipher.decrypt();
-
-    decryption
-}
-
-pub fn decrypt_hex(key: &str, cipher_text: &str) -> String {
-    let mut cipher = Cipher::new_from_hex(key, cipher_text);
-    let decryption = cipher.decrypt_hex();
 
     decryption
 }

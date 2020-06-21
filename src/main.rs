@@ -1,16 +1,20 @@
 extern crate crypto;
 
 use crypto::bytes;
+use crypto::encoding::base64;
 use crypto::hex;
+use crypto::symm;
 use crypto::text;
-use std::fs::File;
+use std::fs::{read_to_string, File};
 use std::io::BufRead;
 use std::io::BufReader;
+use std::str;
 
 fn main() {
     // xor_cypher();
     // xor_file();
-    xor_encrypt();
+    // xor_encrypt();
+    decrypt_yellow_submarine();
 }
 
 #[allow(dead_code)]
@@ -79,4 +83,21 @@ I go crazy when I hear a cymbal";
         &['I' as u8, 'C' as u8, 'E' as u8],
     ));
     println!("0x{}", cypher_text);
+}
+
+fn decrypt_yellow_submarine() {
+    // https://cryptopals.com/sets/1/challenges/7
+
+    let cipher_text = read_to_string("./yellow-encrypted.txt").expect("could not read file");
+    let cipher_text = cipher_text.replace('\n', "");
+    let cipher_text = base64::decode(&cipher_text).unwrap();
+    let cipher_key = "YELLOW SUBMARINE".as_bytes();
+
+    let cipher_text_hex = hex::to_string(&cipher_text);
+    let cipher_key_hex = hex::to_string(&cipher_key);
+
+    let plain = symm::decrypt(&cipher_key_hex, &cipher_text_hex, symm::modes::Mode::ECB);
+    let plain_bytes = &hex::from_string(&plain).unwrap();
+    let plain_ascii = str::from_utf8(plain_bytes).unwrap();
+    print!("{}", plain_ascii);
 }
