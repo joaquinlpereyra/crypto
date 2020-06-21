@@ -1,6 +1,5 @@
 use super::bytes::{Bytes, Endian, Word, NB};
 use super::constants::SBOX;
-use std::fmt::Write;
 use std::ops::Index;
 use std::vec;
 
@@ -51,18 +50,9 @@ impl Key {
         words
     }
 
-    pub fn len(&self) -> u8 {
+    #[cfg(test)]
+    fn len(&self) -> u8 {
         self.words.len() as u8
-    }
-
-    pub fn to_hex(&self) -> String {
-        let mut hex = String::new();
-        for word in &self.words {
-            if let Err(_) = write!(hex, "{}", word.to_hex()) {
-                panic!("could not write to stdout.")
-            }
-        }
-        hex
     }
 }
 

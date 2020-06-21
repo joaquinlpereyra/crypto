@@ -1,4 +1,4 @@
-use super::constants::{RCON, SBOX};
+use super::constants::RCON;
 use std::fmt::{self, Debug, Write};
 use std::ops::{Add, BitXor, Div, Index, Mul, Rem};
 use std::vec;
@@ -528,6 +528,7 @@ impl PartialEq for Byte {
 
 #[cfg(test)]
 mod test {
+    use super::super::constants::SBOX;
     use super::*;
 
     #[test]
