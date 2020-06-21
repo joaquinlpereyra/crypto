@@ -76,13 +76,50 @@ impl Cipher {
         self.state.flatten_into_u8()
     }
 
+    pub fn decrypt(&mut self) -> [u8; 16] {
+        self.add_round_key(self.nr);
+
+        for round in 1..self.nr {
+            self.inverse_shift_rows();
+            self.inverse_substitute_bytes();
+            self.add_round_key(self.nr - round);
+            self.inverse_mix_columns();
+        }
+
+        self.inverse_shift_rows();
+        self.inverse_substitute_bytes();
+        self.add_round_key(0);
+
+        self.state.flatten_into_u8()
+    }
+
+    pub fn decrypt_hex(&mut self) -> String {
+        let cipher_text = self.decrypt();
+        Bytes::new(&cipher_text, Endian::Big).to_hex()
+    }
+
     /// Known as "SubBytes()" in the AES specification.
     fn substitute_bytes(&mut self) {
         let new_columns: Vec<Word> = self
             .state
             .clone_columns()
             .iter_mut()
-            .map(|clm| clm.subword())
+            .map(|clm| clm.subword(constants::SBOX))
+            .collect();
+        self.state = Block::new([
+            new_columns[0].clone(),
+            new_columns[1].clone(),
+            new_columns[2].clone(),
+            new_columns[3].clone(),
+        ])
+    }
+
+    fn inverse_substitute_bytes(&mut self) {
+        let new_columns: Vec<Word> = self
+            .state
+            .clone_columns()
+            .iter_mut()
+            .map(|clm| clm.subword(constants::INVERSE_SBOX))
             .collect();
         self.state = Block::new([
             new_columns[0].clone(),
@@ -96,31 +133,39 @@ impl Cipher {
         let old = self.state.clone_columns();
         let mut new = old.clone();
 
-        // for loops, who needs them, right???
-        // this looks like a mess but it is
-        // pretty easy to folow
+        // grab the Nth byte of each column
+        // and set it it to the Nth byte
+        // of the column to its Nth-right
+        // example, the second byte of the second column
+        // will get the value of the second byte in the
+        // fourth column
+        for clm in 0..4 {
+            new[clm].set_byte(1, old[(clm + 1) % 4][1]);
+        }
+        for clm in 0..4 {
+            new[clm].set_byte(2, old[(clm + 2) % 4][2]);
+        }
+        for clm in 0..4 {
+            new[clm].set_byte(3, old[(clm + 3) % 4][3]);
+        }
 
-        // consider the second row of the state
-        // shift it rightwise by one
-        new[0].set_byte(1, old[1][1]);
-        new[1].set_byte(1, old[2][1]);
-        new[2].set_byte(1, old[3][1]);
-        new[3].set_byte(1, old[0][1]);
+        self.state = Block::new(new);
+    }
 
-        // consider the third row of the state
-        // shift it rightwise by two
-        new[0].set_byte(2, old[2][2]);
-        new[1].set_byte(2, old[3][2]);
-        new[2].set_byte(2, old[0][2]);
-        new[3].set_byte(2, old[1][2]);
+    fn inverse_shift_rows(&mut self) {
+        let old = self.state.clone_columns();
+        let mut new = old.clone();
 
-        // you get the meaning, this time
-        // shifting by three..
-        new[0].set_byte(3, old[3][3]);
-        new[1].set_byte(3, old[0][3]);
-        new[2].set_byte(3, old[1][3]);
-        new[3].set_byte(3, old[2][3]);
-
+        let mod_four = |x: isize| x.rem_euclid(4) as usize;
+        for clm in 0..4 {
+            new[clm].set_byte(1, old[mod_four(clm as isize - 1)][1]);
+        }
+        for clm in 0..4 {
+            new[clm].set_byte(2, old[mod_four(clm as isize - 2)][2]);
+        }
+        for clm in 0..4 {
+            new[clm].set_byte(3, old[mod_four(clm as isize - 3)][3]);
+        }
         self.state = Block::new(new);
     }
 
@@ -128,17 +173,35 @@ impl Cipher {
         let old = self.state.clone_columns();
         let mut new = old.clone();
 
-        let two = Byte::new(2);
-        let three = Byte::new(3);
+        let _2 = Byte::new(2);
+        let _3 = Byte::new(3);
 
         for (i, clm) in old.iter().enumerate() {
-            new[i].set_byte(0, two * clm[0] + three * clm[1] + clm[2] + clm[3]);
-            new[i].set_byte(1, clm[0] + two * clm[1] + three * clm[2] + clm[3]);
-            new[i].set_byte(2, clm[0] + clm[1] + two * clm[2] + three * clm[3]);
-            new[i].set_byte(3, three * clm[0] + clm[1] + clm[2] + two * clm[3]);
+            new[i].set_byte(0, _2 * clm[0] + _3 * clm[1] + clm[2] + clm[3]);
+            new[i].set_byte(1, clm[0] + _2 * clm[1] + _3 * clm[2] + clm[3]);
+            new[i].set_byte(2, clm[0] + clm[1] + _2 * clm[2] + _3 * clm[3]);
+            new[i].set_byte(3, _3 * clm[0] + clm[1] + clm[2] + _2 * clm[3]);
         }
 
         self.state = Block::new(new)
+    }
+
+    fn inverse_mix_columns(&mut self) {
+        let old = self.state.clone_columns();
+        let mut new = old.clone();
+
+        let _9 = Byte::new(9);
+        let _11 = Byte::new(11);
+        let _13 = Byte::new(13);
+        let _14 = Byte::new(14);
+
+        for (i, clm) in old.iter().enumerate() {
+            new[i].set_byte(0, _14 * clm[0] + _11 * clm[1] + _13 * clm[2] + _9 * clm[3]);
+            new[i].set_byte(1, _9 * clm[0] + _14 * clm[1] + _11 * clm[2] + _13 * clm[3]);
+            new[i].set_byte(2, _13 * clm[0] + _9 * clm[1] + _14 * clm[2] + _11 * clm[3]);
+            new[i].set_byte(3, _11 * clm[0] + _13 * clm[1] + _9 * clm[2] + _14 * clm[3]);
+        }
+        self.state = Block::new(new);
     }
 
     fn add_round_key(&mut self, round: u8) {
@@ -171,7 +234,16 @@ mod tests {
     }
 
     #[test]
-    fn creates_state_ok() {
+    fn test_encrypt_simple() {
+        let key = "000102030405060708090a0b0c0d0e0f";
+        let plain = "00112233445566778899aabbccddeeff";
+        let cipher = &mut Cipher::new_from_hex(key, plain);
+        let result = cipher.encrypt_to_hex();
+        assert_eq!(result, "69c4e0d86a7b0430d8cdb78070b4c55a")
+    }
+
+    #[test]
+    fn test_creates_state_ok() {
         let expected = Block::new([
             Word::new_from_hex("3243f6a8"),
             Word::new_from_hex("885a308d"),
@@ -195,6 +267,15 @@ mod tests {
     }
 
     #[test]
+    fn test_inverse_add_round_key() {
+        let mut cipher = cipher();
+        let original = cipher.state.clone();
+        cipher.add_round_key(0);
+        cipher.add_round_key(0);
+        assert_eq!(cipher.state, original);
+    }
+
+    #[test]
     fn test_substitute_bytes() {
         let expected = Block::new([
             Word::new_from_hex("d42711ae"),
@@ -211,6 +292,26 @@ mod tests {
         let mut cipher = cipher();
         cipher.state = input;
         cipher.substitute_bytes();
+        assert_eq!(cipher.state, expected);
+    }
+
+    #[test]
+    fn test_inverse_substitute_bytes() {
+        let input = Block::new([
+            Word::new_from_hex("d42711ae"),
+            Word::new_from_hex("e0bf98f1"),
+            Word::new_from_hex("b8b45de5"),
+            Word::new_from_hex("1e415230"),
+        ]);
+        let expected = Block::new([
+            Word::new_from_hex("193de3be"),
+            Word::new_from_hex("a0f4e22b"),
+            Word::new_from_hex("9ac68d2a"),
+            Word::new_from_hex("e9f84808"),
+        ]);
+        let mut cipher = cipher();
+        cipher.state = input;
+        cipher.inverse_substitute_bytes();
         assert_eq!(cipher.state, expected);
     }
 
@@ -235,6 +336,26 @@ mod tests {
     }
 
     #[test]
+    fn test_inverse_shift_rows() {
+        let input = Block::new([
+            Word::new_from_hex("d4bf5d30"),
+            Word::new_from_hex("e0b452ae"),
+            Word::new_from_hex("b84111f1"),
+            Word::new_from_hex("1e2798e5"),
+        ]);
+        let expected = Block::new([
+            Word::new_from_hex("d42711ae"),
+            Word::new_from_hex("e0bf98f1"),
+            Word::new_from_hex("b8b45de5"),
+            Word::new_from_hex("1e415230"),
+        ]);
+        let mut cipher = cipher();
+        cipher.state = input;
+        cipher.inverse_shift_rows();
+        assert_eq!(cipher.state, expected);
+    }
+
+    #[test]
     fn test_mix_columns() {
         let expected = Block::new([
             Word::new_from_hex("046681e5"),
@@ -251,6 +372,26 @@ mod tests {
         let mut cipher = cipher();
         cipher.state = input;
         cipher.mix_columns();
+        assert_eq!(cipher.state, expected);
+    }
+
+    #[test]
+    fn test_inverse_mix_columns() {
+        let input = Block::new([
+            Word::new_from_hex("046681e5"),
+            Word::new_from_hex("e0cb199a"),
+            Word::new_from_hex("48f8d37a"),
+            Word::new_from_hex("2806264c"),
+        ]);
+        let expected = Block::new([
+            Word::new_from_hex("d4bf5d30"),
+            Word::new_from_hex("e0b452ae"),
+            Word::new_from_hex("b84111f1"),
+            Word::new_from_hex("1e2798e5"),
+        ]);
+        let mut cipher = cipher();
+        cipher.state = input;
+        cipher.inverse_mix_columns();
         assert_eq!(cipher.state, expected);
     }
 }

@@ -1,4 +1,5 @@
 use super::bytes::{Bytes, Endian, Word, NB};
+use super::constants::SBOX;
 use std::fmt::Write;
 use std::ops::Index;
 use std::vec;
@@ -36,9 +37,9 @@ impl Key {
         while i < (NB * (rounds + 1)) as usize {
             let mut temp = words[i - 1].clone();
             if i as u8 % key_length == 0 {
-                temp = temp.rotword().subword() ^ Word::rcon(i as u8 / key_length);
+                temp = temp.rotword().subword(SBOX) ^ Word::rcon(i as u8 / key_length);
             } else if key_length == 8 && i as u8 % key_length == 4 {
-                temp = temp.subword();
+                temp = temp.subword(SBOX);
             }
             // i could use mem::swap but heck why not clone
             // im doing more complicated things here cowboy
@@ -124,5 +125,4 @@ mod tests {
         assert_eq!(key.words[51].to_hex(), "7401905a");
         assert_eq!(key.words[59].to_hex(), "706c631e");
     }
-
 }

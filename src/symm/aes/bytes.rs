@@ -68,13 +68,14 @@ impl Block {
 
     /// Returns a flattened array of bytes
     pub fn flatten_into_u8(&self) -> [u8; 16] {
-        let numbers: Vec<u8> = self.flatten().into_iter().map(|b| b.get_number()).collect();
+        let numbers: Vec<u8> = self.flatten().iter().map(|b| b.get_number()).collect();
         let mut arr = [0; 16];
         arr.copy_from_slice(&numbers);
         arr
     }
 
     /// Set a new value in the state
+    #[cfg(test)]
     fn set(&mut self, x: usize, y: usize, value: u8) {
         let clm = &self.columns[x as usize];
         let mut new_column = clm.clone();
@@ -83,6 +84,7 @@ impl Block {
     }
 
     /// Retrieve a value from the state
+    #[cfg(test)]
     fn get(&self, x: usize, y: usize) -> Byte {
         self.columns[x as usize][y]
     }
@@ -180,6 +182,7 @@ impl Word {
     /// Create a new word from a hex string.
     /// The hex string must have
     /// a length of exactly 8.
+    #[cfg(test)]
     pub fn new_from_hex(src: &str) -> Word {
         if src.len() != 8 {
             panic!("wrong length for hex string: {}", src);
@@ -214,8 +217,8 @@ impl Word {
         Self::new([self[1], self[2], self[3], self[0]], Endian::Big)
     }
 
-    /// Creates a new word through the AES sbox.
-    pub fn subword(&mut self) -> Word {
+    /// Creates a new word through an AES substitution box.
+    pub fn subword(&mut self, sbox: [[u8; 16]; 16]) -> Word {
         for i in 0..4 {
             let polynomial = self[i].polynomial;
             let x = Byte::new_from_polynomial([
@@ -240,7 +243,7 @@ impl Word {
                 0,
             ])
             .n;
-            let substitution = SBOX[y as usize][x as usize];
+            let substitution = sbox[y as usize][x as usize];
             self.set_byte(i, Byte::new(substitution));
         }
         self.clone()
@@ -572,7 +575,7 @@ mod test {
     #[test]
     fn test_rotword_then_subword() {
         let temp = Word::new_from_hex("09cf4f3c");
-        assert_eq!(temp.clone().rotword().subword().to_hex(), "8a84eb01");
+        assert_eq!(temp.clone().rotword().subword(SBOX).to_hex(), "8a84eb01");
     }
 
     #[test]
@@ -584,7 +587,7 @@ mod test {
     fn test_rotword_then_subword_then_xor() {
         let temp = Word::new_from_hex("09cf4f3c");
         assert_eq!(
-            (temp.clone().rotword().subword() ^ Word::rcon(1)).to_hex(),
+            (temp.clone().rotword().subword(SBOX) ^ Word::rcon(1)).to_hex(),
             "8b84eb01"
         );
     }

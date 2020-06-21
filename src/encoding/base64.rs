@@ -105,9 +105,9 @@ fn ascii_to_base64(bytes: &[u8]) -> Option<Vec<u8>> {
     let mut non_ascii = Vec::with_capacity(bytes.len());
     for b in bytes {
         non_ascii.push(match *b as char {
-            'A'...'Z' => b - 65,
-            'a'...'z' => b - 71,
-            '0'...'9' => b + 4,
+            'A'..='Z' => b - 65,
+            'a'..='z' => b - 71,
+            '0'..='9' => b + 4,
             '+' => 62,
             '/' => 63,
             '=' => 64,
