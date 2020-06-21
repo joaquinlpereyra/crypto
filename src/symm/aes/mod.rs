@@ -2,6 +2,7 @@ mod bytes;
 mod constants;
 mod key;
 
+use super::modes;
 use bytes::{Block, Byte, Bytes, Endian, Word, NB};
 use key::Key;
 
@@ -52,6 +53,27 @@ impl Cipher {
             Word::new([msg[12], msg[13], msg[14], msg[15]], Endian::Big),
         ]);
         Self { nr, state, key }
+    }
+
+    pub fn new_blank(key: &[u8]) -> Self {
+        let nr = match key.len() {
+            16 => 10,
+            24 => 12,
+            32 => 14,
+            other => panic!(format!("impossible key length: {}", other)),
+        };
+
+        let key_bytes = Bytes::new(key, Endian::Big);
+        let key = Key::new(key_bytes, nr).unwrap_or_else(|| panic!("could not generate key"));
+        Self {
+            nr,
+            state: Block::new([Word::zero(), Word::zero(), Word::zero(), Word::zero()]),
+            key,
+        }
+    }
+
+    pub fn set_state(&mut self, state: Block) {
+        self.state = state
     }
 
     pub fn encrypt_to_hex(&mut self) -> String {
@@ -214,6 +236,30 @@ impl Cipher {
         ]);
         // mem swap who even needs u suckerrrrr
         self.state = self.state.clone() ^ block_with_key;
+    }
+}
+
+impl modes::Cipher for Cipher {
+    fn set_state(&mut self, state: &[u8]) {
+        let block = Block::new_from_u8([
+            [state[0], state[1], state[2], state[3]],
+            [state[4], state[5], state[6], state[7]],
+            [state[8], state[9], state[10], state[11]],
+            [state[12], state[13], state[14], state[15]],
+        ]);
+        self.set_state(block)
+    }
+
+    fn encrypt(&mut self) -> Vec<u8> {
+        self.encrypt().to_vec()
+    }
+
+    fn decrypt(&mut self) -> Vec<u8> {
+        self.decrypt().to_vec()
+    }
+
+    fn get_block_size(&self) -> usize {
+        16
     }
 }
 

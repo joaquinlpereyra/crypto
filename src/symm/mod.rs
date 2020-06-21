@@ -1,4 +1,5 @@
 mod aes;
+mod modes;
 pub mod padding;
 
 use aes::Cipher;
