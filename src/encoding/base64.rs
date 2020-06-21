@@ -135,8 +135,8 @@ fn decode_group(bytes: &[u8; 4]) -> [Option<u8>; 3] {
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::hex;
     use super::*;
+    use crate::encoding::hex;
     use std::str;
 
     #[test]

@@ -48,7 +48,7 @@ impl<'a> ECB<'a> {
 mod tests {
     use super::super::aes;
     use super::*;
-    use crate::hex;
+    use crate::encoding::hex;
 
     fn cipher() -> aes::Cipher {
         let key = hex::from_string("000102030405060708090a0b0c0d0e0f").unwrap();

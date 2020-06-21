@@ -1,8 +1,7 @@
 extern crate crypto;
 
 use crypto::bytes;
-use crypto::encoding::base64;
-use crypto::hex;
+use crypto::encoding::{base64, hex};
 use crypto::symm;
 use crypto::text;
 use std::fs::{read_to_string, File};
@@ -12,9 +11,9 @@ use std::str;
 
 fn main() {
     // xor_cypher();
-    // xor_file();
+    xor_file();
     // xor_encrypt();
-    decrypt_yellow_submarine();
+    // decrypt_yellow_submarine();
 }
 
 #[allow(dead_code)]
@@ -24,18 +23,17 @@ fn xor_cypher() {
     // Find it.
     let cypher_text = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736";
     let encrypted_as_hex = hex::from_string(&cypher_text).unwrap();
-    let encrypted_bytes = hex::to_bytes(&encrypted_as_hex);
 
     // All ASCII characters can fill 7 bits: from zero to 127.
     for i in 0..127 {
-        let xored = bytes::repeating_xor(&encrypted_bytes, &[i as u8]);
+        let xored = bytes::repeating_xor(&encrypted_as_hex, &[i as u8]);
         let text = match bytes::to_string(&xored) {
             Some(text) => text,
             None => continue,
         };
         let score = text::frequency_analysis(&text);
         if score > 0.6 {
-            println!("{}", text);
+            println!("{}, key: {}", text, i);
         }
     }
 }
@@ -57,8 +55,7 @@ fn xor_file() {
     // target/release/crypto  0,03s user 0,00s system 99% cpu 0,032 total
     // remember kids. threads are not free!
     for encrypted_line in buffer.lines().map(|l| l.unwrap()) {
-        let encrypted_as_hex = hex::from_string(&encrypted_line).unwrap();
-        let encrypted_bytes = hex::to_bytes(&encrypted_as_hex);
+        let encrypted_bytes = hex::from_string(&encrypted_line).unwrap();
         for i in 0..127 {
             let xored = bytes::repeating_xor(&encrypted_bytes, &[i as u8]);
             let text = match bytes::to_string(&xored) {
@@ -73,6 +70,7 @@ fn xor_file() {
     }
 }
 
+#[allow(dead_code)]
 fn xor_encrypt() {
     // Encrypt the plain text using repeating-key XOR
     // with the key 'ICE'
@@ -85,6 +83,7 @@ I go crazy when I hear a cymbal";
     println!("0x{}", cypher_text);
 }
 
+#[allow(dead_code)]
 fn decrypt_yellow_submarine() {
     // https://cryptopals.com/sets/1/challenges/7
 

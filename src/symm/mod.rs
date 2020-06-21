@@ -1,7 +1,7 @@
 mod aes;
 pub mod modes;
 pub mod padding;
-use crate::hex;
+use crate::encoding::hex;
 
 use aes::Cipher;
 use modes::Mode;
