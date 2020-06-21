@@ -5,6 +5,11 @@ pub trait Cipher {
     fn get_block_size(&self) -> usize;
 }
 
+pub enum Mode {
+    None,
+    ECB,
+}
+
 pub struct ECB<'a> {
     cipher: &'a mut dyn Cipher,
     block_size: usize,
@@ -20,7 +25,7 @@ impl<'a> ECB<'a> {
         let mut plain_text = Vec::with_capacity(msg.len());
 
         for i in (0..msg.len()).step_by(self.block_size) {
-            self.cipher.set_state(&msg[i..self.block_size]);
+            self.cipher.set_state(&msg[i..i + self.block_size]);
             plain_text.append(&mut self.cipher.encrypt());
         }
 
@@ -30,8 +35,8 @@ impl<'a> ECB<'a> {
     pub fn decrypt(&mut self, cipher_text: &[u8]) -> Vec<u8> {
         let mut plain_text = Vec::with_capacity(cipher_text.len());
 
-        for i in (0..cipher_text.len()).skip(self.block_size) {
-            self.cipher.set_state(&cipher_text[i..self.block_size]);
+        for i in (0..cipher_text.len()).step_by(self.block_size) {
+            self.cipher.set_state(&cipher_text[i..i + self.block_size]);
             plain_text.append(&mut self.cipher.decrypt())
         }
 
