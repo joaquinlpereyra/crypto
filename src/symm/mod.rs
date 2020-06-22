@@ -1,88 +1,74 @@
 mod aes;
-pub mod modes;
+mod modes;
 pub mod padding;
-use crate::encoding::hex;
 
 use aes::Cipher;
-use modes::Mode;
 
-pub fn encrypt(key: &str, plain_text: &str, mode: Mode) -> String {
+/// A simple list of encryption modes
+/// supported by this module.
+pub enum Mode {
+    None,
+    ECB,
+}
+
+pub fn encrypt(key: &[u8], plain_text: &[u8], mode: Mode) -> Vec<u8> {
     match mode {
-        Mode::None => encrypt_hex(key, plain_text),
-        Mode::ECB => encrypt_hex_with_ecb(key, plain_text),
+        Mode::ECB => encrypt_with_ecb(key, plain_text),
+        Mode::None => encrypt_raw(key, plain_text),
     }
 }
 
-pub fn decrypt(key: &str, plain_text: &str, mode: Mode) -> String {
+pub fn decrypt(key: &[u8], cipher_text: &[u8], mode: Mode) -> Vec<u8> {
     match mode {
-        Mode::None => decrypt_hex(key, plain_text),
-        Mode::ECB => decrypt_hex_with_ecb(key, plain_text),
+        Mode::ECB => decrypt_with_ecb(key, cipher_text),
+        Mode::None => decrypt_raw(key, cipher_text),
     }
 }
 
-fn encrypt_hex(key: &str, plain_text: &str) -> String {
-    let mut cipher = Cipher::new_from_hex(key, plain_text);
-    let cipher_text = cipher.encrypt_to_hex();
-
-    cipher_text
-}
-
-fn encrypt_hex_with_ecb(key: &str, plain_text: &str) -> String {
-    let key_bytes = hex::from_string(key).expect("invalid key given");
-    let plain_bytes = hex::from_string(plain_text).expect("uneven hex string given");
-    let mut cipher = Cipher::new_blank(&key_bytes);
+fn encrypt_with_ecb(key: &[u8], plain_text: &[u8]) -> Vec<u8> {
+    let mut cipher = Cipher::new(key);
     let mut ecb = modes::ECB::new(&mut cipher);
-
-    hex::to_string(&ecb.encrypt(&plain_bytes))
+    ecb.encrypt(plain_text)
 }
 
-fn decrypt_hex_with_ecb(key: &str, cipher_text: &str) -> String {
-    let key_bytes = hex::from_string(key).expect("invalid key given");
-    let cipher_bytes = hex::from_string(cipher_text).expect("uneven hex string given");
-    let mut cipher = Cipher::new_blank(&key_bytes);
+fn encrypt_raw(key: &[u8], plain_text: &[u8]) -> Vec<u8> {
+    let mut cipher = Cipher::new(key);
+    cipher.set_state(plain_text);
+    cipher.encrypt().to_vec()
+}
+
+pub fn decrypt_with_ecb(key: &[u8], cipher_text: &[u8]) -> Vec<u8> {
+    let mut cipher = Cipher::new(key);
     let mut ecb = modes::ECB::new(&mut cipher);
-
-    hex::to_string(&ecb.decrypt(&cipher_bytes))
+    ecb.decrypt(cipher_text)
 }
 
-pub fn decrypt_hex(key: &str, cipher_text: &str) -> String {
-    let mut cipher = Cipher::new_from_hex(key, cipher_text);
-    let decryption = cipher.decrypt_hex();
-
-    decryption
-}
-
-pub fn encrypt_raw(key: &[u8], plain_text: &[u8; 16]) -> [u8; 16] {
-    let mut cipher = Cipher::new(key, plain_text);
-    let cipher_text = cipher.encrypt();
-
-    cipher_text
-}
-
-pub fn decrypt_raw(key: &[u8], cipher_text: &[u8; 16]) -> [u8; 16] {
-    let mut cipher = Cipher::new(key, cipher_text);
-    let decryption = cipher.decrypt();
-
-    decryption
+pub fn decrypt_raw(key: &[u8], cipher_text: &[u8]) -> Vec<u8> {
+    let mut cipher = Cipher::new(key);
+    cipher.set_state(cipher_text);
+    cipher.decrypt().to_vec()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encoding::hex;
 
     #[test]
     fn test_encrypt_hex() {
-        let key = "000102030405060708090a0b0c0d0e0f";
-        let plain = "00112233445566778899aabbccddeeff";
-        let result = encrypt_hex(&key, &plain);
+        let key = hex::from_string(&"000102030405060708090a0b0c0d0e0f").unwrap();
+        let plain = hex::from_string(&"00112233445566778899aabbccddeeff").unwrap();
+        let result = encrypt(&key, &plain, Mode::None);
+        let result = hex::to_string(&result).to_ascii_lowercase();
         assert_eq!(result, "69c4e0d86a7b0430d8cdb78070b4c55a")
     }
 
     #[test]
     fn test_decrypt_hex() {
-        let key = "000102030405060708090a0b0c0d0e0f";
-        let cipher_text = "69c4e0d86a7b0430d8cdb78070b4c55a";
-        let plain_text = decrypt_hex(&key, cipher_text);
+        let key = hex::from_string("000102030405060708090a0b0c0d0e0f").unwrap();
+        let cipher_text = hex::from_string("69c4e0d86a7b0430d8cdb78070b4c55a").unwrap();
+        let result = decrypt(&key, &cipher_text, Mode::None);
+        let plain_text = hex::to_string(&result).to_ascii_lowercase();
         assert_eq!(plain_text, "00112233445566778899aabbccddeeff");
     }
 }

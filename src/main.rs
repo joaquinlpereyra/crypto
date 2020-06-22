@@ -92,11 +92,7 @@ fn decrypt_yellow_submarine() {
     let cipher_text = base64::decode(&cipher_text).unwrap();
     let cipher_key = "YELLOW SUBMARINE".as_bytes();
 
-    let cipher_text_hex = hex::to_string(&cipher_text);
-    let cipher_key_hex = hex::to_string(&cipher_key);
-
-    let plain = symm::decrypt(&cipher_key_hex, &cipher_text_hex, symm::modes::Mode::ECB);
-    let plain_bytes = &hex::from_string(&plain).unwrap();
-    let plain_ascii = str::from_utf8(plain_bytes).unwrap();
+    let plain = symm::decrypt(&cipher_key, &cipher_text, symm::Mode::ECB);
+    let plain_ascii = str::from_utf8(&plain).unwrap();
     print!("{}", plain_ascii);
 }

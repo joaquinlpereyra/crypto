@@ -1,3 +1,4 @@
+/// A cipher according to modes.
 pub trait Cipher {
     fn set_state(&mut self, state: &[u8]);
     fn encrypt(&mut self) -> Vec<u8>;
@@ -5,11 +6,11 @@ pub trait Cipher {
     fn get_block_size(&self) -> usize;
 }
 
-pub enum Mode {
-    None,
-    ECB,
-}
-
+/// An ECB mode of operation for an arbitrary block cypher
+/// ECB mode will just encrypt every block and concatenate
+/// the outputs to form the cyphertext. Idem for decryption.
+/// Operation on the ECB mode require a working block cipher
+/// and do not assume the plain or cipher text to be padded.
 pub struct ECB<'a> {
     cipher: &'a mut dyn Cipher,
     block_size: usize,
@@ -52,7 +53,7 @@ mod tests {
 
     fn cipher() -> aes::Cipher {
         let key = hex::from_string("000102030405060708090a0b0c0d0e0f").unwrap();
-        aes::Cipher::new_blank(&key)
+        aes::Cipher::new(&key)
     }
 
     #[test]

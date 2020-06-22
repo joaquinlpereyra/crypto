@@ -6,6 +6,15 @@ use super::modes;
 use bytes::{Block, Byte, Bytes, Endian, Word, NB};
 use key::Key;
 
+/// A low-level AES Cipher.
+/// It provides the basic primitives of the AES algorithm.
+/// It does **NOT** implement anything like modes, padding
+/// or anything like that.
+/// Clients are supposed to check for sanity of input parameters
+/// or the Cipher will either malfunction or just panic.
+/// Sanity requirements:
+/// - Key is either 16, 24 or 32 bytes long
+/// - A call to set_state is made before trying to encrypt or decrypt
 pub struct Cipher {
     nr: u8,
     state: Block,
@@ -13,49 +22,7 @@ pub struct Cipher {
 }
 
 impl Cipher {
-    pub fn new(key: &[u8], msg: &[u8; 16]) -> Self {
-        let nr = match key.len() {
-            16 => 10,
-            24 => 12,
-            32 => 14,
-            other => panic!(format!("impossible key length: {}", other)),
-        };
-
-        let key_bytes = Bytes::new(key, Endian::Big);
-        let key = Key::new(key_bytes, nr).unwrap_or_else(|| panic!("could not generate key"));
-        let state = Block::new_from_u8([
-            [msg[0], msg[1], msg[2], msg[3]],
-            [msg[4], msg[5], msg[6], msg[7]],
-            [msg[8], msg[9], msg[10], msg[11]],
-            [msg[12], msg[13], msg[14], msg[15]],
-        ]);
-
-        Self { nr, state, key }
-    }
-
-    pub fn new_from_hex(key: &str, msg: &str) -> Self {
-        let nr = match key.len() {
-            32 => 10,
-            48 => 12,
-            64 => 14,
-            other => panic!(format!("impossible key length: {}", other)),
-        };
-        if msg.len() != 32 {
-            panic!(format!("impossible message length: {}", msg.len()))
-        }
-        let key_bytes = Bytes::new_from_hex_string(key);
-        let key = Key::new(key_bytes, nr).unwrap_or_else(|| panic!("could not generate key"));
-        let msg = Bytes::new_from_hex_string(msg);
-        let state = Block::new([
-            Word::new([msg[0], msg[1], msg[2], msg[3]], Endian::Big),
-            Word::new([msg[4], msg[5], msg[6], msg[7]], Endian::Big),
-            Word::new([msg[8], msg[9], msg[10], msg[11]], Endian::Big),
-            Word::new([msg[12], msg[13], msg[14], msg[15]], Endian::Big),
-        ]);
-        Self { nr, state, key }
-    }
-
-    pub fn new_blank(key: &[u8]) -> Self {
+    pub fn new(key: &[u8]) -> Self {
         let nr = match key.len() {
             16 => 10,
             24 => 12,
@@ -72,13 +39,14 @@ impl Cipher {
         }
     }
 
-    pub fn set_state(&mut self, state: Block) {
-        self.state = state
-    }
-
-    pub fn encrypt_to_hex(&mut self) -> String {
-        let cipher_text = self.encrypt();
-        Bytes::new(&cipher_text, Endian::Big).to_hex()
+    pub fn set_state(&mut self, state: &[u8]) {
+        let block = Block::new_from_u8([
+            [state[0], state[1], state[2], state[3]],
+            [state[4], state[5], state[6], state[7]],
+            [state[8], state[9], state[10], state[11]],
+            [state[12], state[13], state[14], state[15]],
+        ]);
+        self.state = block;
     }
 
     pub fn encrypt(&mut self) -> [u8; 16] {
@@ -115,12 +83,7 @@ impl Cipher {
         self.state.flatten_into_u8()
     }
 
-    pub fn decrypt_hex(&mut self) -> String {
-        let cipher_text = self.decrypt();
-        Bytes::new(&cipher_text, Endian::Big).to_hex()
-    }
-
-    /// Known as "SubBytes()" in the AES specification.
+    // Known as "SubBytes()" in the AES specification.
     fn substitute_bytes(&mut self) {
         let new_columns: Vec<Word> = self
             .state
@@ -241,13 +204,7 @@ impl Cipher {
 
 impl modes::Cipher for Cipher {
     fn set_state(&mut self, state: &[u8]) {
-        let block = Block::new_from_u8([
-            [state[0], state[1], state[2], state[3]],
-            [state[4], state[5], state[6], state[7]],
-            [state[8], state[9], state[10], state[11]],
-            [state[12], state[13], state[14], state[15]],
-        ]);
-        self.set_state(block)
+        self.set_state(state)
     }
 
     fn encrypt(&mut self) -> Vec<u8> {
@@ -266,37 +223,26 @@ impl modes::Cipher for Cipher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encoding::hex;
 
     fn cipher() -> Cipher {
-        let input = [
-            0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37,
-            0x07, 0x34,
-        ];
         let cipher_key = [
             0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf,
             0x4f, 0x3c,
         ];
-        Cipher::new(&cipher_key, &input)
+        Cipher::new(&cipher_key)
     }
 
     #[test]
     fn test_encrypt_simple() {
-        let key = "000102030405060708090a0b0c0d0e0f";
-        let plain = "00112233445566778899aabbccddeeff";
-        let cipher = &mut Cipher::new_from_hex(key, plain);
-        let result = cipher.encrypt_to_hex();
-        assert_eq!(result, "69c4e0d86a7b0430d8cdb78070b4c55a")
-    }
+        let key = hex::from_string(&"000102030405060708090a0b0c0d0e0f").unwrap();
+        let plain = hex::from_string("00112233445566778899aabbccddeeff").unwrap();
+        let cipher = &mut Cipher::new(&key);
+        cipher.set_state(&plain);
 
-    #[test]
-    fn test_creates_state_ok() {
-        let expected = Block::new([
-            Word::new_from_hex("3243f6a8"),
-            Word::new_from_hex("885a308d"),
-            Word::new_from_hex("313198a2"),
-            Word::new_from_hex("e0370734"),
-        ]);
-        assert_eq!(cipher().state, expected);
+        let result = hex::to_string(&cipher.encrypt()).to_ascii_lowercase();
+
+        assert_eq!(result, "69c4e0d86a7b0430d8cdb78070b4c55a")
     }
 
     #[test]
@@ -308,6 +254,10 @@ mod tests {
             Word::new_from_hex("e9f84808"),
         ]);
         let mut cipher = cipher();
+        cipher.set_state(&[
+            0x32, 0x43, 0xf6, 0xa8, 0x88, 0x5a, 0x30, 0x8d, 0x31, 0x31, 0x98, 0xa2, 0xe0, 0x37,
+            0x07, 0x34,
+        ]);
         cipher.add_round_key(0);
         assert_eq!(cipher.state, expected)
     }
@@ -315,6 +265,8 @@ mod tests {
     #[test]
     fn test_inverse_add_round_key() {
         let mut cipher = cipher();
+        let plain = hex::from_string("00112233445566778899aabbccddeeff").unwrap();
+        cipher.set_state(&plain);
         let original = cipher.state.clone();
         cipher.add_round_key(0);
         cipher.add_round_key(0);

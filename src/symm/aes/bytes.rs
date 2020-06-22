@@ -17,7 +17,7 @@ use std::vec;
 pub static NB: u8 = 4;
 
 /// A block is a 4x4 matrix of words.
-/// It is generally addresses by column.
+/// It is generally adressed by column.
 #[derive(PartialEq, Clone)]
 pub struct Block {
     columns: [Word; 4],
@@ -318,6 +318,7 @@ impl Bytes {
     }
 
     /// Must be padded!
+    #[cfg(test)]
     pub fn new_from_hex_string(src: &str) -> Bytes {
         let chars: Vec<char> = src.chars().filter(|c| !c.is_whitespace()).collect();
         let mut vec = Vec::new();
