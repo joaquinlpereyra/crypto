@@ -9,11 +9,13 @@ use aes::Cipher;
 pub enum Mode {
     None,
     ECB,
+    CBC { iv: [u8; 16] },
 }
 
 pub fn encrypt(key: &[u8], plain_text: &[u8], mode: Mode) -> Vec<u8> {
     match mode {
         Mode::ECB => encrypt_with_ecb(key, plain_text),
+        Mode::CBC { iv } => encrypt_with_cbc(key, plain_text, iv),
         Mode::None => encrypt_raw(key, plain_text),
     }
 }
@@ -21,6 +23,7 @@ pub fn encrypt(key: &[u8], plain_text: &[u8], mode: Mode) -> Vec<u8> {
 pub fn decrypt(key: &[u8], cipher_text: &[u8], mode: Mode) -> Vec<u8> {
     match mode {
         Mode::ECB => decrypt_with_ecb(key, cipher_text),
+        Mode::CBC { iv } => decrypt_with_cbc(key, cipher_text, iv),
         Mode::None => decrypt_raw(key, cipher_text),
     }
 }
@@ -29,6 +32,12 @@ fn encrypt_with_ecb(key: &[u8], plain_text: &[u8]) -> Vec<u8> {
     let mut cipher = Cipher::new(key);
     let mut ecb = modes::ECB::new(&mut cipher);
     ecb.encrypt(plain_text)
+}
+
+fn encrypt_with_cbc(key: &[u8], plain_text: &[u8], iv: [u8; 16]) -> Vec<u8> {
+    let mut cipher = Cipher::new(key);
+    let mut cbc = modes::CBC::new(&mut cipher, iv.to_vec());
+    cbc.encrypt(plain_text)
 }
 
 fn encrypt_raw(key: &[u8], plain_text: &[u8]) -> Vec<u8> {
@@ -41,6 +50,12 @@ pub fn decrypt_with_ecb(key: &[u8], cipher_text: &[u8]) -> Vec<u8> {
     let mut cipher = Cipher::new(key);
     let mut ecb = modes::ECB::new(&mut cipher);
     ecb.decrypt(cipher_text)
+}
+
+pub fn decrypt_with_cbc(key: &[u8], cipher_text: &[u8], iv: [u8; 16]) -> Vec<u8> {
+    let mut cipher = Cipher::new(key);
+    let mut cbc = modes::CBC::new(&mut cipher, iv.to_vec());
+    cbc.decrypt(cipher_text)
 }
 
 pub fn decrypt_raw(key: &[u8], cipher_text: &[u8]) -> Vec<u8> {

@@ -1,4 +1,5 @@
 use super::constants::RCON;
+use crate::encoding::hex;
 use std::fmt::{self, Debug, Write};
 use std::ops::{Add, BitXor, Div, Index, Mul, Rem};
 use std::vec;
@@ -320,15 +321,7 @@ impl Bytes {
     /// Must be padded!
     #[cfg(test)]
     pub fn new_from_hex_string(src: &str) -> Bytes {
-        let chars: Vec<char> = src.chars().filter(|c| !c.is_whitespace()).collect();
-        let mut vec = Vec::new();
-        for (i, _) in chars.iter().enumerate().step_by(2) {
-            let a = chars[i];
-            let b = chars[i + 1];
-            let hex_u8 = format!("{}{}", a, b);
-            let number = u8::from_str_radix(&hex_u8, 16).unwrap();
-            vec.push(number);
-        }
+        let vec = hex::from_string(src).unwrap();
         Bytes::new(&vec, Endian::Big)
     }
 

@@ -1,9 +1,9 @@
 extern crate crypto;
 
-use crypto::bytes;
 use crypto::encoding::{base64, hex};
-use crypto::symm;
-use crypto::text;
+use crypto::symm::padding;
+use crypto::{bytes, symm, text};
+use std::collections::HashMap;
 use std::fs::{read_to_string, File};
 use std::io::BufRead;
 use std::io::BufReader;
@@ -11,9 +11,12 @@ use std::str;
 
 fn main() {
     // xor_cypher();
-    xor_file();
+    // xor_file();
     // xor_encrypt();
     // decrypt_yellow_submarine();
+    // find_ecb();
+    // implement_pkcs7();
+    decrypt_with_cbc();
 }
 
 #[allow(dead_code)]
@@ -43,7 +46,7 @@ fn xor_file() {
     // There's one line in the file which has been encrypted against a single character.
     // Find the line and the character.
 
-    let file = match File::open("./single-xor.txt") {
+    let file = match File::open("./6.txt") {
         Ok(file) => file,
         Err(_) => panic!("file not found!"),
     };
@@ -87,7 +90,7 @@ I go crazy when I hear a cymbal";
 fn decrypt_yellow_submarine() {
     // https://cryptopals.com/sets/1/challenges/7
 
-    let cipher_text = read_to_string("./yellow-encrypted.txt").expect("could not read file");
+    let cipher_text = read_to_string("./7.txt").expect("could not read file");
     let cipher_text = cipher_text.replace('\n', "");
     let cipher_text = base64::decode(&cipher_text).unwrap();
     let cipher_key = "YELLOW SUBMARINE".as_bytes();
@@ -95,4 +98,53 @@ fn decrypt_yellow_submarine() {
     let plain = symm::decrypt(&cipher_key, &cipher_text, symm::Mode::ECB);
     let plain_ascii = str::from_utf8(&plain).unwrap();
     print!("{}", plain_ascii);
+}
+
+#[allow(dead_code)]
+fn find_ecb() {
+    // https://cryptopals.com/sets/1/challenges/8
+    // In this file are a bunch of hex-encoded ciphertexts.
+    // One of them has been encrypted with ECB.
+    // Detect it.
+    let mut blocks: HashMap<String, usize> = HashMap::new();
+
+    let cipher_texts = read_to_string("./8.txt").expect("could not read file");
+    let cipher_texts = cipher_texts.replace('\n', "");
+
+    let bytes = hex::from_string(&cipher_texts).unwrap();
+
+    // aes encrypts 16 bytes per block
+    for block in bytes.chunks(16) {
+        let hex = hex::to_string(&block);
+        let counter = blocks.entry(hex).or_insert(0);
+        *counter += 1
+    }
+    blocks
+        .iter()
+        .filter(|&(_, v)| *v != 1)
+        .map(|(k, v)| println!("{}: {}", k, v))
+        .collect()
+}
+
+#[allow(dead_code)]
+fn implement_pkcs7() {
+    let input = "YELLOW SUBMARINE";
+    let padded = match padding::pad(padding::Padding::PKCS7, input.as_bytes(), 20) {
+        Some(bytes) => bytes,
+        None => panic!("could not pad? why?"),
+    };
+    println!("{:?}", str::from_utf8(&padded));
+}
+
+#[allow(dead_code)]
+fn decrypt_with_cbc() {
+    let key = "YELLOW SUBMARINE".as_bytes();
+    let iv = [0; 16];
+    let cipher_text = read_to_string("./10.txt").expect("could not read file");
+    let cipher_text = cipher_text.replace("\n", "");
+    let cipher_text = base64::decode(&cipher_text).unwrap();
+    let cbc = symm::Mode::CBC { iv };
+    let plain = symm::decrypt(&key, &cipher_text, cbc);
+    let plain_str = str::from_utf8(&plain).unwrap();
+    println!("{}", plain_str);
 }
