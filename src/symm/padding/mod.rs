@@ -1,12 +1,14 @@
 /// A collection of padding algorithms.
 pub enum Padding {
     PKCS7,
+    None,
 }
 
 /// Pads the data to the desired length with the specified algorithm.
-pub fn pad(with: Padding, data: &[u8], desired_len: u8) -> Option<Vec<u8>> {
+pub fn get_pad(with: Padding, data: &[u8], desired_len: u8) -> Option<Vec<u8>> {
     match with {
         Padding::PKCS7 => pad_PKCS7(data, desired_len),
+        Padding::None => Some(data.to_owned()),
     }
 }
 
@@ -14,6 +16,7 @@ pub fn pad(with: Padding, data: &[u8], desired_len: u8) -> Option<Vec<u8>> {
 pub fn unpad(with: Padding, data: &[u8]) -> Option<Vec<u8>> {
     match with {
         Padding::PKCS7 => unpad_PKCS7(data),
+        Padding::None => Some(data.to_owned()),
     }
 }
 
@@ -28,10 +31,9 @@ fn pad_PKCS7(data: &[u8], target_len: u8) -> Option<Vec<u8>> {
     if data.len() as u8 > target_len {
         return None;
     }
-    let mut result: Vec<u8> = data.to_vec();
     let data_len = data.len() as u8;
     let padding: u8 = target_len - module(data_len.into(), target_len.into()) as u8;
-    result.reserve(padding as usize);
+    let mut result: Vec<u8> = Vec::with_capacity(padding as usize);
     for _ in 0..padding {
         result.push(padding)
     }
@@ -70,8 +72,7 @@ mod tests {
     fn test_no_pad_neccesary_but_PKCS7_is_weird() {
         let data = "YELLOW SUBMARINE";
         let expected =
-            "YELLOW SUBMARINE\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10"
-                .as_bytes();
+            "\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10".as_bytes();
         assert_eq!(pad_PKCS7(data.as_bytes(), 16).unwrap(), expected)
     }
 
@@ -79,7 +80,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_pad_with_PKCS7() {
         let data = "YELLOW S";
-        let expected = "YELLOW S\x08\x08\x08\x08\x08\x08\x08\x08".as_bytes();
+        let expected = "\x08\x08\x08\x08\x08\x08\x08\x08".as_bytes();
         assert_eq!(pad_PKCS7(data.as_bytes(), 16).unwrap(), expected)
     }
 
@@ -96,5 +97,4 @@ mod tests {
         let input = "YELLOWSSSS";
         assert!(unpad_PKCS7(input.as_bytes()).is_none())
     }
-
 }
