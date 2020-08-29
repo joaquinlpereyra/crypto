@@ -1,6 +1,7 @@
 mod aes;
 mod modes;
 pub mod padding;
+use std::fmt;
 
 use aes::Cipher;
 use padding::{get_pad, unpad, Padding};
@@ -11,6 +12,17 @@ pub enum Mode {
     None,
     ECB,
     CBC { iv: Vec<u8> },
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mode = match self {
+            Mode::ECB => "ECB",
+            Mode::CBC { iv: _ } => "CBC",
+            Mode::None => "None",
+        };
+        write!(f, "{}", mode)
+    }
 }
 
 fn pad_to_sixteen(plain_text: &[u8], padding: Padding) -> Option<Vec<u8>> {
