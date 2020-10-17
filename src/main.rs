@@ -1,9 +1,8 @@
-use crypto::encoding::hex;
+use crypto::encoding::{base64, hex};
 use crypto::symm::padding::{self, Padding};
 use crypto::{bytes, random, symm, text};
 use std::collections::HashMap;
 use std::fs::{read_to_string, File};
-use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::str;
@@ -16,7 +15,9 @@ fn main() {
     // find_ecb();
     // implement_pkcs7();
     // decrypt_with_cbc();
-    cbc_ecb_oracle();
+    // cbc_ecb_oracle();
+    byte_at_a_time_ecb_decryption();
+    // ecb_cut_and_paste();
 }
 
 #[allow(dead_code)]
@@ -236,4 +237,83 @@ fn cbc_ecb_oracle() {
         println!("oracle says CBC!");
     }
     println!("encryptor says {}", mode)
+}
+
+#[allow(dead_code)]
+fn byte_at_a_time_ecb_decryption() {
+    let random_key = random::get_random(16);
+
+    let oracle = |user_input: &str| -> Vec<u8> {
+        let secret_message = read_to_string("./12.txt").expect("could not read file");
+        let secret_message = secret_message.replace('\n', "");
+        let secret_message = base64::decode(&secret_message).unwrap();
+        let secret_message = str::from_utf8(&secret_message).unwrap();
+
+        let text_to_encrypt = user_input.to_owned() + secret_message;
+
+        let cipher_text = symm::encrypt(
+            &random_key.clone(),
+            text_to_encrypt.as_bytes(),
+            symm::Mode::ECB,
+            Padding::PKCS7,
+        );
+        return cipher_text;
+    };
+
+    let make_table = |prefix: String| -> HashMap<String, char> {
+        let mut table = HashMap::new();
+        for n in 0..128 {
+            let ascii = str::from_utf8(&[n]).unwrap().to_owned();
+            let payload = prefix.to_owned() + &ascii;
+            let cipher_text = oracle(&payload);
+            let cipher_block = cipher_text.chunks_exact(16).nth(0).unwrap();
+            let cipher_text_hex = hex::to_string(&cipher_block);
+            table.insert(cipher_text_hex, ascii.chars().next().unwrap());
+        }
+
+        table
+    };
+
+    let mut plain_text = vec![];
+    let mut prefix = "X".repeat(15);
+    let mut payload = "X".repeat(15);
+
+    let secret_apendix = oracle("");
+    let secret_apendix_blocks = secret_apendix.chunks_exact(16);
+    let secret_apendix_block_ammount = &secret_apendix_blocks.len();
+    for (block_number, block) in secret_apendix_blocks.enumerate() {
+        for _ in block {
+            println! {"{}", prefix};
+            let table = make_table(prefix.clone());
+            let cipher_text = oracle(&payload);
+            let cipher_block = cipher_text
+                .chunks_exact(16)
+                .nth(block_number.into())
+                .unwrap();
+
+            let known = table.get(&hex::to_string(&cipher_block)).unwrap();
+            plain_text.push(known.to_string());
+            prefix.push(*known);
+            prefix = prefix[1..].to_string();
+            if payload.len() > 0 {
+                payload = payload[1..].to_string();
+            }
+            if *known == '\u{0001}' && block_number == secret_apendix_block_ammount - 1 {
+                // this marks the end of our plaintext, as PKCS7
+                // padding will add a 0x01 padding to our table when we are out
+                // of actual plaintext
+                // Example with "YELLOW SUBMARINEY".
+                // Table is made with prefix "ELLOW SUBMARINE""
+                // Next loop will match "Y".
+                // Table is made with prefix "LLOW SUBMARINEY"
+                // Notice the payload here is 14 bytes long, as to hide the YE.
+                // Now the ciphertext on the second block will be "LLOW SUBMARINEY{0001}",
+                // because it doesn't have any more data!
+                print!("{}", plain_text.join(""));
+                return;
+            }
+        }
+        prefix = plain_text[block_number * 16..((block_number + 1) * 16)][1..].join("");
+        payload = "X".repeat(15);
+    }
 }
