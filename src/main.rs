@@ -1,6 +1,7 @@
 use crypto::encoding::{base64, hex};
+use crypto::frequency;
 use crypto::symm::padding::{self, Padding};
-use crypto::{bytes, random, symm, text};
+use crypto::{bytes, random, symm};
 use std::collections::HashMap;
 use std::fs::{read_to_string, File};
 use std::io::BufRead;
@@ -35,7 +36,7 @@ fn xor_cypher() {
             Some(text) => text,
             None => continue,
         };
-        let score = text::frequency_analysis(&text);
+        let score = frequency::analysis(&text);
         if score > 0.6 {
             println!("{}, key: {}", text, i);
         }
@@ -66,7 +67,7 @@ fn xor_file() {
                 Some(text) => text,
                 None => continue, // most probably our secret is utf8, at least?
             };
-            let score = text::frequency_analysis(&text);
+            let score = frequency::analysis(&text);
             if score > 0.7 {
                 println!("score: {}, text: {}, key: {}", score, text, i);
             }

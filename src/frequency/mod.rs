@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 type Score = f32;
 
-/// Only supports English right now.
-pub fn frequency_analysis(ascii_text: &str) -> Score {
+/// Given an ASCII Text, return a Score.
+/// The higher the score, the more likely the
+/// text is in English.
+pub fn analysis(ascii_text: &str) -> Score {
     // set the letter frequency table.
     let letter_by_frequency: HashMap<char, u8> = vec![
         ('e', 26),
@@ -69,21 +71,21 @@ mod tests {
     #[test]
     fn test_song() {
         let song = "cooking MC's like a pound of bacon";
-        let score = frequency_analysis(song);
+        let score = analysis(song);
         assert!(score > 0.50);
     }
 
     #[test]
     fn test_full_of_e() {
         let txt = "eeeee";
-        let score = frequency_analysis(txt);
+        let score = analysis(txt);
         assert!(score == 1.00);
     }
 
     #[test]
     fn test_gibberish() {
         let txt = "lKTnLxpqDbwgNstXMdkPPKZmtAmBBKnqkQclYXBT";
-        let score = frequency_analysis(txt);
+        let score = analysis(txt);
         assert!(score < 0.50);
     }
 }
