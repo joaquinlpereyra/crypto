@@ -18,7 +18,8 @@ fn main() {
     // cbc_ecb_oracle();
     // byte_at_a_time_ecb_decryption();
     // ecb_cut_and_paste();
-    byte_at_a_time_ecb_decryption_hard();
+    // byte_at_a_time_ecb_decryption_hard();
+    detect_and_strip_pkcs7();
 }
 
 #[allow(dead_code)]
@@ -270,8 +271,7 @@ fn byte_at_a_time_ecb_decryption() {
     // to guess and work from there.
 
     let secret = oracle("");
-    let secret_len = secret.len();
-    let mut padding = "X".repeat(secret_len);
+    let mut padding = "X".repeat(16);
     let mut plain_text = String::new();
     let start = (padding.len() / 16 - 1) * 16;
     let end = start + 16;
@@ -512,8 +512,7 @@ fn byte_at_a_time_ecb_decryption_hard() {
     // There, we know the padding size now. The rest is like challenge 12.
     let pad_random = 16 - random_size % 16;
     // Set the padding to enough as to separate the random bytes in their own
-    // blocks, and then 15 to leave exactly one byte of the target bytes in
-    // the middle block
+    // blocks. 16 extra to start the bruteforce ;)
     let mut padding = "X".repeat(pad_random + 16);
     let mut plain_text = String::new();
     let start = ((padding.len() + random_size) / 16 - 1) * 16;
@@ -557,4 +556,16 @@ fn byte_at_a_time_ecb_decryption_hard() {
         }
     }
     println!("{}", &plain_text);
+}
+
+#[allow(dead_code)]
+fn detect_and_strip_pkcs7() {
+    // This one is easy because I basically already have it implemented
+    //
+    let strip_pkcs7 = |input: &[u8]| -> Vec<u8> {
+        symm::padding::unpad(symm::padding::Padding::PKCS7, input).unwrap()
+    };
+
+    let stripped = strip_pkcs7("ICE ICE BABY\x04\x04\x04\x04".as_bytes());
+    println!("{}", str::from_utf8(&stripped).unwrap());
 }
