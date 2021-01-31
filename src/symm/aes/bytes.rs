@@ -1,9 +1,10 @@
 use super::constants::RCON;
-use crate::encoding::hex;
 use std::fmt::{self, Debug, Write};
 use std::ops::{Add, BitXor, Div, Index, Mul, Rem};
 use std::vec;
 
+#[cfg(test)]
+use crate::encoding::hex;
 // This module is used to create and manipulate
 // bytes, words and other data structures
 // in the AES Galoies Field of G(2^8).

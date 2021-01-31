@@ -4,12 +4,17 @@ pub enum Padding {
     None,
 }
 
-/// Pads the data to the desired length with the specified algorithm.
+/// Returns the padding of the data
 pub fn get_pad(with: Padding, data: &[u8], desired_len: u8) -> Option<Vec<u8>> {
     match with {
         Padding::PKCS7 => pad_PKCS7(data, desired_len),
         Padding::None => Some(data.to_owned()),
     }
+}
+
+pub fn pad(with: Padding, mut data: Vec<u8>, desired_len: u8) {
+    let pad = get_pad(with, &data, desired_len).unwrap();
+    data.extend_from_slice(&pad);
 }
 
 /// Reverses the padding processes, returning the original data.
@@ -45,6 +50,7 @@ fn unpad_PKCS7(data: &[u8]) -> Option<Vec<u8>> {
     let len = data.len();
     let padding = *data.last().unwrap() as usize;
     if padding > len {
+        println!("len: {} / padding: {}", len, padding);
         return None;
     }
 

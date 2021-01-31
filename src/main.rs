@@ -1,11 +1,10 @@
-use crypto::encoding::{base64, hex};
+use crypto::encoding::{base64, cookies, hex};
 use crypto::frequency;
 use crypto::symm::padding::{self, Padding};
 use crypto::{bytes, random, symm};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{read_to_string, File};
-use std::io::BufRead;
-use std::io::BufReader;
+use std::io::{self, BufRead, BufReader, Read};
 use std::str;
 
 fn main() {
@@ -17,8 +16,9 @@ fn main() {
     // implement_pkcs7();
     // decrypt_with_cbc();
     // cbc_ecb_oracle();
-    byte_at_a_time_ecb_decryption();
+    // byte_at_a_time_ecb_decryption();
     // ecb_cut_and_paste();
+    byte_at_a_time_ecb_decryption_hard();
 }
 
 #[allow(dead_code)]
@@ -274,6 +274,249 @@ fn byte_at_a_time_ecb_decryption() {
     let mut padding = "X".repeat(secret_len);
     let mut plain_text = String::new();
     let start = (padding.len() / 16 - 1) * 16;
+    let end = start + 16;
+
+    loop {
+        println!("{}", &plain_text);
+        if padding.len() > 0 {
+            padding = padding[1..].to_string()
+        };
+
+        // encrypt the payload with ajusted to leave space
+        // the the amount of unknown bytes in the block
+        let cipher_text = oracle(&padding);
+
+        // grab the block we are actually interested in
+        let cipher_block = &cipher_text[start..end];
+
+        // bruteforce  the heck out of it
+        let mut found = false;
+        for n in 0..128 {
+            let ascii = str::from_utf8(&[n]).unwrap().to_owned();
+            let payload = padding.clone() + &plain_text + &ascii;
+            let attempt = oracle(&payload);
+            let attempt_block = &attempt[start..end];
+            if attempt_block == cipher_block {
+                plain_text += &ascii;
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            // this should be the padding, but lets check
+            // if this is the padding, it must be the U+0001 char
+            match &plain_text.chars().last() {
+                None => panic!("could not bruteforce even first char"),
+                Some(c) if *c != '\u{0001}' => panic!("could not bruteforce!"),
+                Some(_) => plain_text = plain_text[0..plain_text.len() - 2].to_string(),
+            };
+            break;
+        }
+    }
+    println!("{}", &plain_text);
+}
+
+#[allow(dead_code)]
+fn ecb_cut_and_paste() {
+    #[derive(Debug)]
+    struct User {
+        email: String,
+        uid: String,
+        role: String,
+    }
+
+    impl User {
+        pub fn new(data: &str) -> User {
+            let (mut email, mut uid, mut role): (String, String, String) =
+                ("".to_owned(), "".to_owned(), "".to_owned());
+            let attrs = data.split('&').map(|a| a.split('='));
+            for mut attr in attrs {
+                let key = match attr.next() {
+                    Some("") => continue,
+                    Some(s) => s.to_owned(),
+                    // It is surprisingly impossible as far as I can tell
+                    // to get a zero-length iterator from a split.
+                    None => unreachable!(),
+                };
+                let value = attr.next().map(|s| s.into()).unwrap_or(String::from(""));
+
+                if let Some(_) = attr.next() {
+                    panic!()
+                }
+
+                match key.as_ref() {
+                    "email" => email = value,
+                    "uid" => uid = value,
+                    "role" => role = value,
+                    _ => panic!(),
+                }
+            }
+
+            User { email, uid, role }
+        }
+
+        pub fn as_cookie(&self) -> String {
+            format!("email={}&uid={}&role={}", self.email, self.uid, self.role)
+        }
+    }
+
+    let profile_for = |email: &str| -> String {
+        // Sanitize, what could go wrong?
+        let mut ok_email = email.replace("&", "");
+        ok_email = ok_email.replace("=", "");
+
+        let user = User {
+            email: ok_email,
+            uid: "10".into(),
+            role: "user".into(),
+        };
+        user.as_cookie()
+    };
+    let random_key = random::get_random(16);
+
+    // "email=EMAIL&uid=UID&role=ROLE"
+    // we have to leave the string ADMIN in there somewhere
+    // use an email so that the `email=EMAIL` part is exactly
+    // 16 bytes, then set the rest to the string admin + padding
+    let email = "1".repeat(10);
+    let admin = "admin";
+    let pad = &symm::padding::get_pad(symm::padding::Padding::PKCS7, admin.as_bytes(), 16).unwrap();
+
+    let email = (email.to_owned() + admin) + str::from_utf8(&pad).unwrap();
+    let profile = profile_for(&email);
+    let first_cipher_text = symm::encrypt(
+        &random_key,
+        profile.as_bytes(),
+        symm::Mode::ECB,
+        Padding::PKCS7,
+    );
+
+    // now we have to leave the USER be by itself, so we can replace it
+    // with the second block of the first ciphertext
+    // without an email we have 23 bytes
+    // "email=&uid=10&role=user"
+    // we need to push it to exactly 36 bytes (so only the user word is in the third block)
+    let profile = profile_for(&"1".repeat(13));
+    let second_cipher_text = symm::encrypt(
+        &random_key,
+        profile.as_bytes(),
+        symm::Mode::ECB,
+        Padding::PKCS7,
+    );
+
+    // the second block of the first cipher text
+    let admin = &first_cipher_text[16..32];
+    let mut copy_pasted = Vec::new();
+    copy_pasted.extend_from_slice(&second_cipher_text[0..32]);
+    copy_pasted.extend_from_slice(admin);
+    let decrypted = symm::decrypt(&random_key, &copy_pasted, symm::Mode::ECB, Padding::PKCS7);
+    let decoded = User::new(str::from_utf8(&decrypted).unwrap());
+    println!("{:?}", decoded)
+}
+
+#[allow(dead_code)]
+fn byte_at_a_time_ecb_decryption_hard() {
+    let random_key = random::get_random(16);
+    let random_number = random::in_range(0, 32);
+    let random_prefix = random::get_random(random_number);
+
+    let oracle = |user_input: &str| -> Vec<u8> {
+        let secret_message = read_to_string("./12.txt").expect("could not read file");
+        let secret_message = secret_message.replace('\n', "");
+        let secret_message = base64::decode(&secret_message).unwrap();
+        let secret_message = str::from_utf8(&secret_message).unwrap();
+
+        let text_to_encrypt = user_input.to_owned() + secret_message;
+        let mut plaintext = random_prefix.clone();
+        plaintext.extend_from_slice(text_to_encrypt.as_bytes());
+
+        let cipher_text = symm::encrypt(
+            &random_key.clone(),
+            &plaintext,
+            symm::Mode::ECB,
+            Padding::PKCS7,
+        );
+        return cipher_text;
+    };
+
+    // The only real challenge here is separating the target bytes from
+    // the prefix. Remeber:
+    // Oracle(INPUT) -> E(RANDOM | INPUT | TARGET, K).
+    // If my INPUT is 32 bytes long, now matter how big or small the RANDOM
+    // is, I can assure that my input will occupy by itself AT LEAST a block.
+    //
+    // Now this is ECB. If I continue sending the same ciphertext all blocks will
+    // have that same ciphertext.
+    //
+    // If I send 48 (!!!) bytes, I can assure that at least two blocks will be the same.
+    // The padding ocuppies at least as many blocks as where those two are.
+    //
+    // RANDOM BLOCK * N |
+    // (RANDOM+INPUT) BLOCK |
+    // INPUT BLOCK |
+    // INPUT BLOCK |
+    // (INPUT + TARGET) BLOCK |
+    // TARGET BLOCK * M
+    //
+    // Once I know N, then I need to know how many random bytes are extra. I can send 47
+    // bytes. If my two pure input blocks are still there, it means there is at least
+    // one padding byte. Repeat until I know exactly how many padding bytes are ther.
+    let get_repeated_in_ecb = |ciphertext: &[u8]| -> Option<(Vec<u8>, usize)> {
+        let mut blocks: HashMap<&[u8], usize> = HashMap::new();
+        for block in ciphertext.chunks(16) {
+            let counter = blocks.entry(&block).or_insert(0);
+            *counter += 1
+        }
+        let repeated: HashMap<&[u8], usize> = blocks
+            .iter()
+            .filter(|&(_, &v)| v != 1)
+            .map(|(&k, &v)| (k, v))
+            .collect();
+        let three = repeated.iter().find(|&(_, &v)| v == 3 as usize);
+        let two = repeated.iter().find(|&(_, &v)| v == 2 as usize);
+        if let Some((k, &n)) = three {
+            return Some((k.to_vec(), n));
+        };
+        if let Some((k, &n)) = two {
+            return Some((k.to_vec(), n));
+        };
+        None
+    };
+
+    let padding = "X".repeat(48);
+    let mut oracled = oracle(&padding);
+    let (repeated_block, mut times) = get_repeated_in_ecb(&oracled).unwrap();
+    let position_of_repeated = crypto::position_of_block_in(&oracled, &repeated_block);
+
+    // Now the fun starts. I need to make my input block appear only one time.
+    // Then I know I have figured out how many random bytes are there mixing
+    // with my input. I will add the possible random byte blocks of the beginning
+    // later
+    let mut random_size = 0;
+    while times != 1 {
+        random_size += 1;
+        let padding = "X".repeat(48 - random_size);
+        oracled = oracle(&padding);
+        times = crypto::count_block_in_ciphertext(&oracled, &repeated_block);
+    }
+
+    // Make note that I had to try one padding LESS than random
+    // to see if the blocks changed, so random_size is actually one byte smaller
+    // than calculated
+    random_size -= 1;
+
+    // Add the random bytes which ocuppied whole blocks at the beginning of the
+    // ciphertext
+    random_size += (position_of_repeated - 1) * 16;
+
+    // There, we know the padding size now. The rest is like challenge 12.
+    let pad_random = 16 - random_size % 16;
+    // Set the padding to enough as to separate the random bytes in their own
+    // blocks, and then 15 to leave exactly one byte of the target bytes in
+    // the middle block
+    let mut padding = "X".repeat(pad_random + 16);
+    let mut plain_text = String::new();
+    let start = ((padding.len() + random_size) / 16 - 1) * 16;
     let end = start + 16;
 
     loop {

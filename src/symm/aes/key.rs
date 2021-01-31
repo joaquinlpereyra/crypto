@@ -1,6 +1,5 @@
 use super::bytes::{Bytes, Endian, Word, NB};
 use super::constants::SBOX;
-use crate::encoding::hex;
 use std::ops::Index;
 use std::vec;
 
