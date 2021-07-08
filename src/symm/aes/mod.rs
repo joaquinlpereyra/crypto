@@ -27,7 +27,7 @@ impl Cipher {
             16 => 10,
             24 => 12,
             32 => 14,
-            other => panic!(format!("impossible key length: {}", other)),
+            other => panic!("impossible key length: {}", other),
         };
 
         let key_bytes = Bytes::new(key, Endian::Big);
