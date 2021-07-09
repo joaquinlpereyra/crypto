@@ -49,7 +49,6 @@ pub fn decrypt(key: &[u8], cipher_text: &[u8], mode: Mode, padding: Padding) -> 
         Mode::CBC { iv } => decrypt_with_cbc(key, cipher_text, iv),
         Mode::None => decrypt_raw(key, cipher_text),
     };
-    println!("{:?}", &plain_text);
     unpad(padding, &plain_text).unwrap()
 }
 

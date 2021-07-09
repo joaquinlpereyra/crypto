@@ -94,7 +94,6 @@ impl<'a> CBC<'a> {
             self.cipher.set_state(&cipher_block);
             let decrypted = self.cipher.decrypt();
             let mut plain = xor(&decrypted, &last_block);
-
             last_block = cipher_block.clone().to_vec();
             plain_text.append(&mut plain);
         }

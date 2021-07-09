@@ -12,5 +12,6 @@ fn main() {
     // first_set::byte_at_a_time_ecb_decryption();
     // first_set::ecb_cut_and_paste();
     // first_set::byte_at_a_time_ecb_decryption_hard();
-    first_set::detect_and_strip_pkcs7();
+    // first_set::detect_and_strip_pkcs7();
+    first_set::cbc_bitflipping_attacks();
 }

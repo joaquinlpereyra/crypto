@@ -552,3 +552,117 @@ pub fn detect_and_strip_pkcs7() {
     let stripped = strip_pkcs7("ICE ICE BABY\x04\x04\x04\x04".as_bytes());
     println!("{}", str::from_utf8(&stripped).unwrap());
 }
+
+#[allow(dead_code)]
+pub fn cbc_bitflipping_attacks() {
+    // Final string if input is "vinito" will look like this:
+    // comment1=cooking%20MCs;userdata=vinito;comment2=%20like%20a%20pound%20of%20bacon;
+    let random_key = random::get_random(16);
+    let iv = random::get_random(16);
+
+    let encrypt_cbc = |s: &str| -> Vec<u8> {
+        let mut ok_input = s.replace(";", "");
+        ok_input = ok_input.replace("=", "");
+
+        let first_chunk = "comment1=cooking%20MCs;userdata=".to_owned();
+        let last_chunk = ";comment2=%20like%20a%20pound%20of%20bacon";
+
+        let plain_text = first_chunk + &ok_input + last_chunk;
+        let cipher_text = symm::encrypt(
+            &random_key,
+            plain_text.as_bytes(),
+            symm::Mode::CBC { iv: iv.clone() },
+            Padding::PKCS7,
+        );
+        return cipher_text;
+    };
+
+    let decrypt_and_check_admin = |cipher_text: &[u8]| -> bool {
+        let plain = symm::decrypt(
+            &random_key,
+            &cipher_text,
+            symm::Mode::CBC { iv: iv.clone() },
+            Padding::PKCS7,
+        );
+        return str::from_utf8(&plain)
+            .and_then(|s: &str| Ok(s.contains(";admin=true")))
+            .unwrap_or_default();
+    };
+
+    // Now, the objective is to get to put an `;admin=true` inside
+    // the ciphertext. This should not be possible, because
+    // the encrypt_cbc function will eat up both ; and =, so the
+    // best I can do is endup with something like admintrue
+    //
+    // I will somehow have to craft a ciphertext that decrypts to that
+    // though.
+    // Let's do this programatically, although it would probably first
+    // it would be easier to do it interatively.
+
+    // This is my best attempt, I know this should fail though
+    let cipher_attempt = encrypt_cbc(";admin=true");
+    println!("{:?}", cipher_attempt);
+    println!("{}", hex::to_string(&cipher_attempt));
+    assert!(!decrypt_and_check_admin(&cipher_attempt));
+
+    // OK, so here's the strategy. When ECB decrypts, it does:
+    // XOR(decripted_block, last_ciphertext_block)
+    // So it XORs with the ciphertext! I can abuse this to change
+    // the actual plaintext.
+    //
+    // So I will set my input to be a bunch of filling
+    // + (close to ;)admin(close to =)true
+    //
+    // Then I can modify the ciphertext of my filling.
+    // That part of the ciphertext will decrypt to garbage, but then
+    // it will get xored with the part the encrypted the
+    // (close to;)admin(close to =)true.
+    //
+    // Of course when I say (close to ;) I mean a character
+    // that is close to it in the ASCII table.
+    //
+    // ASCII(;) == 0x3b == 0b1110 1100
+    // ASCII(=) == 0x3d == 0b1111 0100
+    //
+    // I will start by introducing a ;, I will be happy with that
+    // So if instead of ; I will something close to it
+    // ASCII(:) == 0b1110 1000
+    let mut cipher_break = encrypt_cbc("aa:admin\x3ctrue");
+
+    // One kinda needs to know where the things is putting the input
+    // at least roughly... In this case we can decrypt the output so that's easy
+    //
+    // So, why XOR the first block with 1 works?
+    // Because this will get xored with the almost-plaintext before producing the final text
+    // when decrypting in ECB
+    //
+    // In practice, this means that I will keep all of the XOR except for the last bit,
+    // which will get flipped (hence, CBC bit flipping)
+    //
+    // When flipping before xoring, we will cause the XOR to produce a byte exactly
+    // one bit bigger. Why?
+    //
+    // Because we know what's the input. We know that CIPHER_BLOCK_1[18] XOR PLAIN_TEXT_2[18]
+    // (where CIPHER_BLOCK_1 referes to CIPHER_BLOCK number 1 of course and [18] an example position)
+    // equals ":", which is 0b1110 1100. This means that both have the same bit at the last position
+    // By flipping one, we cause it return 1 when xoring, thus increasing it one bit.
+    //
+    // If our input ended with one, 0b1110 1101, for example, we would know that CIPHER_BLOCK_1[X]
+    // XOR PLAIN_TEXT_2[X] are different. When flipping one, we would cause them to be the same.
+    // Thus, we would DECREASE one bit!
+    cipher_break[18] ^= 0b0000_0001;
+    cipher_break[24] ^= 0b0000_0001;
+    println!("{:?}", &cipher_break);
+    let plain = symm::decrypt(
+        &random_key,
+        &cipher_break,
+        symm::Mode::CBC { iv: iv.clone() },
+        Padding::PKCS7,
+    );
+    println!("{:?}", &plain);
+    println!("{}", hex::to_string(&plain));
+    unsafe {
+        println!("{}", str::from_utf8_unchecked(&plain[16..]));
+    }
+    println!("{}", str::from_utf8(&plain[16..]).unwrap());
+}

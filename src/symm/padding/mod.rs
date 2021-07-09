@@ -50,7 +50,6 @@ fn unpad_PKCS7(data: &[u8]) -> Option<Vec<u8>> {
     let len = data.len();
     let padding = *data.last().unwrap() as usize;
     if padding > len {
-        println!("len: {} / padding: {}", len, padding);
         return None;
     }
 
