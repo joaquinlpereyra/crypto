@@ -145,18 +145,9 @@ pub mod cbc_padding_oracle {
             return r ^ valid_pad;
         }
 
-        // We may reach this state when we hit a valid padding by chance.
-        // Example: consider we are looking at the last block of a ciphertext,
-        // which is padded with 0x03, 0x03 and 0x03 at the end.
-        // Our target byte is 15.
-        // When we try r == 3, the oracle will say it is a valid padding.
-        // But it is a lie that 0x03 XOR 0x01 = 0x02 is the intermediate state.
-        // We stated that a padding is valid only if
-        // poisoned(prev)[target_byte] XOR IS(cur_block) == valid_pad,
-        // but we just saw that was a bit of a lie.
-        // A padding cna be valid also if
-        // poisoned(prev)[target_byte] == actual_padding_byte
-        // but this gives us no information on the ciphertext...
+        // There **must** be a valid padding produced by bruteforce,
+        // because there **is** at least one number that when
+        // xored against r will produce a the valid padding byte
         unreachable!("No poison produced valid padding? Impossible.")
     }
 
