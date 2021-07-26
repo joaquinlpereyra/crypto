@@ -69,8 +69,8 @@ mod test {
 
     #[test]
     fn test_parse_str() {
-        let map = decode(String::from("v1=k1&v2=k2")).unwrap();
-        let mut expected = HashMap::new();
+        let map = decode("v1=k1&v2=k2").unwrap();
+        let mut expected = BTreeMap::new();
         expected.insert(String::from("v1"), String::from("k1"));
         expected.insert(String::from("v2"), String::from("k2"));
         assert_eq!(map, expected);
@@ -78,8 +78,8 @@ mod test {
 
     #[test]
     fn test_parse_empty_str() {
-        let map = decode(String::from("")).unwrap();
-        let expected = HashMap::new();
+        let map = decode("").unwrap();
+        let expected = BTreeMap::new();
         assert_eq!(map, expected);
     }
 }

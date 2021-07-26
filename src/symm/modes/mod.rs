@@ -53,11 +53,11 @@ impl<'a> ECB<'a> {
 pub struct CBC<'a> {
     cipher: &'a mut dyn Cipher,
     block_size: usize,
-    iv: Vec<u8>,
+    iv: &'a [u8],
 }
 
 impl<'a> CBC<'a> {
-    pub fn new(cipher: &'a mut dyn Cipher, iv: Vec<u8>) -> CBC<'a> {
+    pub fn new(cipher: &'a mut dyn Cipher, iv: &'a [u8]) -> CBC<'a> {
         let block_size = cipher.get_block_size();
         if block_size != iv.len() {
             panic!("IV must be the safe length as the block of the cipher");
@@ -72,13 +72,15 @@ impl<'a> CBC<'a> {
     pub fn encrypt(&mut self, msg: &[u8]) -> Vec<u8> {
         let mut cipher_text = Vec::with_capacity(msg.len());
 
-        let mut last_block = self.iv.clone();
-
         for plain_block in msg.chunks_exact(self.block_size) {
-            let xored = xor(plain_block, &last_block);
+            let xor_right_hand = cipher_text
+                .rchunks_exact(self.block_size)
+                .next()
+                .unwrap_or(self.iv);
+
+            let xored = xor(plain_block, xor_right_hand);
             self.cipher.set_state(&xored);
             let mut block = self.cipher.encrypt();
-            last_block = block.clone();
             cipher_text.append(&mut block);
         }
 
@@ -88,13 +90,13 @@ impl<'a> CBC<'a> {
     pub fn decrypt(&mut self, msg: &[u8]) -> Vec<u8> {
         let mut plain_text = Vec::with_capacity(msg.len());
 
-        let mut last_block = self.iv.clone();
+        let mut last_block = self.iv;
 
         for cipher_block in msg.chunks_exact(self.block_size) {
             self.cipher.set_state(&cipher_block);
             let decrypted = self.cipher.decrypt();
             let mut plain = xor(&decrypted, &last_block);
-            last_block = cipher_block.clone().to_vec();
+            last_block = &cipher_block;
             plain_text.append(&mut plain);
         }
 
@@ -164,10 +166,36 @@ mod tests {
         .unwrap();
         let iv = [0x00; 16];
         let mut cipher = aes::Cipher::new("YELLOW SUBMARINE".as_bytes());
-        let mut cbc = CBC::new(&mut cipher, iv.to_vec());
+        let mut cbc = CBC::new(&mut cipher, &iv);
         let plain = cbc.decrypt(&cipher_text);
         let plain = str::from_utf8(&plain).unwrap();
         assert_eq!("I'm back and I'm ringin' the bel", plain)
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_encrypt_decrypt_CBC_problematic_key() {
+        let key = [
+            252, 79, 217, 52, 129, 236, 103, 160, 241, 221, 81, 130, 242, 82, 41, 255,
+        ]
+        .to_vec();
+        let iv = [
+            0x17, 0x5A, 0x29, 0x75, 0xC8, 0xBB, 0x80, 0x8B, 0x8F, 0xA2, 0xA7, 0x81, 0x79, 0x24,
+            0xFF, 0x3D,
+        ]
+        .to_vec();
+        // Exactly 3 blocks long... when encrypted will have 4
+        let mut plaintext = "MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc="
+            .as_bytes()
+            .to_owned();
+        // Pad manually
+        plaintext.extend([0x10; 0x10].iter());
+        let mut cipher = aes::Cipher::new(&key);
+        let mut cbc = CBC::new(&mut cipher, &iv);
+        let ciphertext = cbc.encrypt(&plaintext);
+
+        let decrypted = cbc.decrypt(&ciphertext);
+        assert_eq!(decrypted, plaintext);
     }
 
     #[test]
@@ -176,7 +204,7 @@ mod tests {
         let plain = "I'm back and I'm ringin' the bel".as_bytes();
         let iv = [0x00; 16];
         let mut cipher = aes::Cipher::new("YELLOW SUBMARINE".as_bytes());
-        let mut cbc = CBC::new(&mut cipher, iv.to_vec());
+        let mut cbc = CBC::new(&mut cipher, &iv);
         let cypher = cbc.encrypt(&plain);
         let expected = hex::from_string(
             "0912 30aa de3e b330 dbaa 4358 f88d 2a6c d5cf 8355 cb68 2339 7ad4 3906 df43 4455",

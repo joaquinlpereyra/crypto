@@ -1,6 +1,7 @@
 use crypto::encoding::{base64, hex};
 use crypto::frequency;
 use crypto::symm::padding::{self, Padding};
+use crypto::symm::Ciphertext;
 use crypto::{bytes, random, symm};
 use std::collections::HashMap;
 use std::fs::{read_to_string, File};
@@ -33,18 +34,11 @@ pub fn xor_cypher() {
 pub fn xor_file() {
     // There's one line in the file which has been encrypted against a single character.
     // Find the line and the character.
-
     let file = match File::open("./6.txt") {
         Ok(file) => file,
         Err(_) => panic!("file not found!"),
     };
     let buffer = BufReader::new(file);
-    // a lesson here:
-    // at first, I spawned a thread every line.
-    // target/release/crypto  0,24s user 0,02s system 385% cpu 0,066 total
-    // then, i removed the threads...
-    // target/release/crypto  0,03s user 0,00s system 99% cpu 0,032 total
-    // remember kids. threads are not free!
     for encrypted_line in buffer.lines().map(|l| l.unwrap()) {
         let encrypted_bytes = hex::from_string(&encrypted_line).unwrap();
         for i in 0..127 {
@@ -83,7 +77,8 @@ pub fn decrypt_yellow_submarine() {
     let cipher_text = base64::decode(&cipher_text).unwrap();
     let cipher_key = "YELLOW SUBMARINE".as_bytes();
 
-    let plain = symm::decrypt(&cipher_key, &cipher_text, symm::Mode::ECB, Padding::None);
+    let plain =
+        Ciphertext::from_existing(cipher_text, symm::Mode::ECB, Padding::None).decrypt(&cipher_key);
     let plain_ascii = str::from_utf8(&plain).unwrap();
     print!("{}", plain_ascii);
 }
@@ -117,7 +112,7 @@ pub fn find_ecb() {
 #[allow(dead_code)]
 pub fn implement_pkcs7() {
     let input = "YELLOW SUBMARINE";
-    let padded = match padding::get_pad(padding::Padding::PKCS7, input.as_bytes(), 20) {
+    let padded = match padding::get_pad(&padding::Padding::PKCS7, input.as_bytes(), 20) {
         Some(bytes) => bytes,
         None => panic!("could not pad? why?"),
     };
@@ -132,7 +127,7 @@ pub fn decrypt_with_cbc() {
     let cipher_text = cipher_text.replace("\n", "");
     let cipher_text = base64::decode(&cipher_text).unwrap();
     let cbc = symm::Mode::CBC { iv };
-    let plain = symm::decrypt(&key, &cipher_text, cbc, Padding::None);
+    let plain = symm::Ciphertext::from_existing(cipher_text, cbc, Padding::None).decrypt(&key);
     let plain_str = str::from_utf8(&plain).unwrap();
     println!("{}", plain_str);
 }
@@ -189,7 +184,7 @@ pub fn cbc_ecb_oracle() {
         };
         let mode_str = format!("{}", &mode);
         (
-            symm::encrypt(&random_key, &pretext, mode, Padding::PKCS7),
+            Ciphertext::new(&random_key, &pretext, mode, Padding::PKCS7).bytes,
             mode_str,
         )
     }
@@ -238,13 +233,13 @@ pub fn byte_at_a_time_ecb_decryption() {
 
         let text_to_encrypt = user_input.to_owned() + secret_message;
 
-        let cipher_text = symm::encrypt(
-            &random_key.clone(),
+        let cipher_text = Ciphertext::new(
+            &random_key,
             text_to_encrypt.as_bytes(),
             symm::Mode::ECB,
             Padding::PKCS7,
         );
-        return cipher_text;
+        return cipher_text.bytes;
     };
 
     // This a nice solution which I coded after reading
@@ -364,11 +359,12 @@ pub fn ecb_cut_and_paste() {
     // 16 bytes, then set the rest to the string admin + padding
     let email = "1".repeat(10);
     let admin = "admin";
-    let pad = &symm::padding::get_pad(symm::padding::Padding::PKCS7, admin.as_bytes(), 16).unwrap();
+    let pad =
+        &symm::padding::get_pad(&symm::padding::Padding::PKCS7, admin.as_bytes(), 16).unwrap();
 
     let email = (email.to_owned() + admin) + str::from_utf8(&pad).unwrap();
     let profile = profile_for(&email);
-    let first_cipher_text = symm::encrypt(
+    let first_cipher_text = Ciphertext::new(
         &random_key,
         profile.as_bytes(),
         symm::Mode::ECB,
@@ -381,7 +377,7 @@ pub fn ecb_cut_and_paste() {
     // "email=&uid=10&role=user"
     // we need to push it to exactly 36 bytes (so only the user word is in the third block)
     let profile = profile_for(&"1".repeat(13));
-    let second_cipher_text = symm::encrypt(
+    let second_cipher_text = Ciphertext::new(
         &random_key,
         profile.as_bytes(),
         symm::Mode::ECB,
@@ -389,11 +385,12 @@ pub fn ecb_cut_and_paste() {
     );
 
     // the second block of the first cipher text
-    let admin = &first_cipher_text[16..32];
-    let mut copy_pasted = Vec::new();
-    copy_pasted.extend_from_slice(&second_cipher_text[0..32]);
-    copy_pasted.extend_from_slice(admin);
-    let decrypted = symm::decrypt(&random_key, &copy_pasted, symm::Mode::ECB, Padding::PKCS7);
+    let admin = &first_cipher_text.bytes[16..32];
+    let mut copy_pasted_buf = Vec::new();
+    copy_pasted_buf.extend_from_slice(&second_cipher_text.bytes[0..32]);
+    copy_pasted_buf.extend_from_slice(admin);
+    let copy_pasted = Ciphertext::from_existing(copy_pasted_buf, symm::Mode::ECB, Padding::PKCS7);
+    let decrypted = copy_pasted.decrypt(&random_key);
     let decoded = User::new(str::from_utf8(&decrypted).unwrap());
     println!("{:?}", decoded)
 }
@@ -414,13 +411,8 @@ pub fn byte_at_a_time_ecb_decryption_hard() {
         let mut plaintext = random_prefix.clone();
         plaintext.extend_from_slice(text_to_encrypt.as_bytes());
 
-        let cipher_text = symm::encrypt(
-            &random_key.clone(),
-            &plaintext,
-            symm::Mode::ECB,
-            Padding::PKCS7,
-        );
-        return cipher_text;
+        let cipher_text = Ciphertext::new(&random_key, &plaintext, symm::Mode::ECB, Padding::PKCS7);
+        return cipher_text.bytes;
     };
 
     // The only real challenge here is separating the target bytes from
@@ -546,7 +538,7 @@ pub fn byte_at_a_time_ecb_decryption_hard() {
 pub fn detect_and_strip_pkcs7() {
     // This one is easy because I basically already have it implemented
     let strip_pkcs7 = |input: &[u8]| -> Vec<u8> {
-        symm::padding::unpad(symm::padding::Padding::PKCS7, input).unwrap()
+        symm::padding::unpad(&symm::padding::Padding::PKCS7, input).unwrap()
     };
 
     let stripped = strip_pkcs7("ICE ICE BABY\x04\x04\x04\x04".as_bytes());
@@ -568,13 +560,13 @@ pub fn cbc_bitflipping_attacks() {
         let last_chunk = ";comment2=%20like%20a%20pound%20of%20bacon";
 
         let plain_text = first_chunk + &ok_input + last_chunk;
-        let cipher_text = symm::encrypt(
+        let cipher_text = Ciphertext::new(
             &random_key,
             plain_text.as_bytes(),
             symm::Mode::CBC { iv: iv.clone() },
             Padding::PKCS7,
         );
-        return cipher_text;
+        return cipher_text.bytes;
     };
 
     let decrypt_and_check_admin = |cipher_text: &[u8]| -> bool {

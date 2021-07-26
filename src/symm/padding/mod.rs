@@ -5,20 +5,20 @@ pub enum Padding {
 }
 
 /// Returns the padding of the data
-pub fn get_pad(with: Padding, data: &[u8], desired_len: u8) -> Option<Vec<u8>> {
+pub fn get_pad(with: &Padding, data: &[u8], desired_len: u8) -> Option<Vec<u8>> {
     match with {
         Padding::PKCS7 => pad_PKCS7(data, desired_len),
         Padding::None => Some(data.to_owned()),
     }
 }
 
-pub fn pad(with: Padding, mut data: Vec<u8>, desired_len: u8) {
+pub fn pad(with: &Padding, mut data: Vec<u8>, desired_len: u8) {
     let pad = get_pad(with, &data, desired_len).unwrap();
     data.extend_from_slice(&pad);
 }
 
 /// Reverses the padding processes, returning the original data.
-pub fn unpad(with: Padding, data: &[u8]) -> Option<Vec<u8>> {
+pub fn unpad(with: &Padding, data: &[u8]) -> Option<Vec<u8>> {
     match with {
         Padding::PKCS7 => unpad_PKCS7(data),
         Padding::None => Some(data.to_owned()),
@@ -49,7 +49,7 @@ fn pad_PKCS7(data: &[u8], target_len: u8) -> Option<Vec<u8>> {
 fn unpad_PKCS7(data: &[u8]) -> Option<Vec<u8>> {
     let len = data.len();
     let padding = *data.last().unwrap() as usize;
-    if padding > len {
+    if padding > len || padding == 0 {
         return None;
     }
 
@@ -94,6 +94,13 @@ mod tests {
     fn unpad_with_PKCS7() {
         let input = "YELLOW S\x08\x08\x08\x08\x08\x08\x08\x08".as_bytes();
         assert_eq!(unpad_PKCS7(input).unwrap(), "YELLOW S".as_bytes().to_vec())
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn unpad_data_end_with_zero_is_none() {
+        let input = "YELLOW S\x08\x08\x08\x08\x08\x08\x08\x00".as_bytes();
+        assert!(unpad_PKCS7(input).is_none())
     }
 
     #[test]
