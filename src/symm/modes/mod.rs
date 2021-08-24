@@ -104,10 +104,75 @@ impl<'a> CBC<'a> {
     }
 }
 
+pub struct CTR<'a> {
+    cipher: &'a mut dyn Cipher,
+    block_size: usize,
+    // counter format:
+    // 8 bytes little endian arbitrary nonce
+    // 8 bytes little endian incremental number
+    counter: [u8; 16],
+    counter_int: u64,
+}
+
+impl<'a> CTR<'a> {
+    pub fn new(cipher: &'a mut dyn Cipher, nonce: u64) -> CTR<'a> {
+        let block_size = cipher.get_block_size();
+        let counter_int = 0;
+        let counter = Self::new_counter(nonce);
+
+        CTR {
+            cipher,
+            block_size,
+            counter,
+            counter_int,
+        }
+    }
+
+    fn new_counter(nonce: u64) -> [u8; 16] {
+        // Init counter
+        let mut counter = [0; 16];
+        let counter_int = 0;
+        let nonce_bytes = nonce.to_le_bytes();
+        for i in 0..8 {
+            counter[i] = nonce_bytes[i];
+        }
+        for i in 8..16 {
+            counter[i] = counter_int;
+        }
+        counter
+    }
+
+    pub fn encrypt(&mut self, msg: &[u8]) -> Vec<u8> {
+        let mut ciphertext = Vec::new();
+        for chunk in msg.chunks(self.block_size) {
+            self.cipher.set_state(&self.counter);
+            let counter_block = self.cipher.encrypt();
+            let mut xored = xor(&counter_block, chunk);
+            xored.resize(16, 0);
+            ciphertext.append(&mut xored);
+            self.increase_counter();
+        }
+        ciphertext
+    }
+
+    pub fn decrypt(&mut self, msg: &[u8]) -> Vec<u8> {
+        self.encrypt(msg)
+    }
+
+    fn increase_counter(&mut self) {
+        self.counter_int += 1;
+        let new_nonce_bytes = (self.counter_int).to_le_bytes();
+        for i in 8..16 {
+            self.counter[i] = new_nonce_bytes[i - 8]
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::aes;
     use super::*;
+    use crate::encoding::base64;
     use crate::encoding::hex;
     use std::str;
 
@@ -211,5 +276,50 @@ mod tests {
         )
         .unwrap();
         assert_eq!(cypher, expected)
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_CTR_create_iv() {
+        let mut cipher = aes::Cipher::new("YELLOW SUBMARINE".as_bytes());
+        let ctr = CTR::new(&mut cipher, 0);
+
+        assert_eq!(
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, // second part should be exactly the block coount
+                0, 0, 0, 0, 0, 0, 0, 0, // first part should be the counter zero on first
+            ],
+            ctr.counter,
+        )
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_CTR_add_to_counter() {
+        let mut cipher = aes::Cipher::new("YELLOW SUBMARINE".as_bytes());
+        let mut ctr = CTR::new(&mut cipher, 2);
+        for i in 0..1024 {
+            let mut expected_counter = [0; 16];
+            expected_counter[0] = 2; // nonce should stay fixed
+            let expected_incremental_number = (i as u64).to_le_bytes();
+            for j in 8..16 {
+                expected_counter[j] = expected_incremental_number[j - 8]
+            }
+            assert_eq!(expected_counter, ctr.counter);
+            ctr.increase_counter();
+        }
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_CTR_decrypt() {
+        let ciphertext = base64::decode(
+            "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==",
+        )
+        .unwrap();
+        let mut cipher = aes::Cipher::new("YELLOW SUBMARINE".as_bytes());
+        let mut ctr = CTR::new(&mut cipher, 0);
+        let plaintext = ctr.decrypt(&ciphertext);
+        str::from_utf8(&plaintext).unwrap();
     }
 }

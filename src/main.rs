@@ -1,4 +1,5 @@
 mod first_set;
+mod second_set;
 mod third_set;
 
 fn main() {
@@ -7,15 +8,15 @@ fn main() {
     // first_set::xor_encrypt();
     // first_set::decrypt_yellow_submarine();
     // first_set::find_ecb();
-    // first_set::implement_pkcs7();
-    // first_set::decrypt_with_cbc();
-    // first_set::cbc_ecb_oracle();
-    // first_set::byte_at_a_time_ecb_decryption();
-    // first_set::ecb_cut_and_paste();
-    // first_set::byte_at_a_time_ecb_decryption_hard();
-    // first_set::detect_and_strip_pkcs7();
-    // first_set::cbc_bitflipping_attacks();
-    for _ in 0..100 {
-        third_set::cbc_padding_oracle::attack();
-    }
+    // second_set::implement_pkcs7();
+    // second_set::decrypt_with_cbc();
+    // second_set::cbc_ecb_oracle();
+    // second_set::byte_at_a_time_ecb_decryption();
+    // second_set::ecb_cut_and_paste();
+    // second_set::byte_at_a_time_ecb_decryption_hard();
+    // second_set::detect_and_strip_pkcs7();
+    // second_set::cbc_bitflipping_attacks();
+    // third_set::cbc_padding_oracle();
+    // third_set::implement_ctr();
+    third_set::break_fixed_nonce_ctr();
 }

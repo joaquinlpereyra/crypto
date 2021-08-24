@@ -8,10 +8,12 @@ use padding::{get_pad, unpad, Padding};
 
 /// A simple list of encryption modes
 /// supported by this module.
+#[derive(Clone)]
 pub enum Mode {
     None,
     ECB,
     CBC { iv: Vec<u8> },
+    CTR { nonce: u64 },
 }
 
 impl fmt::Display for Mode {
@@ -19,12 +21,16 @@ impl fmt::Display for Mode {
         let mode = match self {
             Mode::ECB => "ECB".to_owned(),
             Mode::CBC { iv } => format!("CBC | IV: {:02x?}", iv.clone()),
+            Mode::CTR { nonce } => {
+                format!("CTR | Nonce: {:02x}", nonce)
+            }
             Mode::None => "None".to_owned(),
         };
         write!(f, "{}", mode)
     }
 }
 
+#[derive(Clone)]
 pub struct Ciphertext {
     pub bytes: Vec<u8>,
     pub mode: Mode,
@@ -49,6 +55,7 @@ impl Ciphertext {
         let bytes = match &mode {
             Mode::ECB => Self::encrypt_with_ecb(key, &padded_plain_text),
             Mode::CBC { iv } => Self::encrypt_with_cbc(key, &padded_plain_text, iv),
+            Mode::CTR { nonce } => Self::encrypt_with_ctr(key, &padded_plain_text, *nonce),
             Mode::None => Self::encrypt_raw(key, &padded_plain_text),
         };
         Self {
@@ -85,6 +92,7 @@ impl Ciphertext {
         match &self.mode {
             Mode::ECB => Ciphertext::decrypt_with_ecb(key, &self.bytes),
             Mode::CBC { iv } => Ciphertext::decrypt_with_cbc(key, &self.bytes, iv),
+            Mode::CTR { nonce } => Ciphertext::decrypt_with_ctr(key, &self.bytes, *nonce),
             Mode::None => Ciphertext::decrypt_raw(key, &self.bytes),
         }
     }
@@ -99,6 +107,12 @@ impl Ciphertext {
         let mut cipher = Cipher::new(key);
         let mut cbc = modes::CBC::new(&mut cipher, iv);
         cbc.encrypt(plain_text)
+    }
+
+    fn encrypt_with_ctr(key: &[u8], plain_text: &[u8], nonce: u64) -> Vec<u8> {
+        let mut cipher = Cipher::new(key);
+        let mut ctr = modes::CTR::new(&mut cipher, nonce);
+        ctr.encrypt(plain_text)
     }
 
     fn encrypt_raw(key: &[u8], plain_text: &[u8]) -> Vec<u8> {
@@ -117,6 +131,12 @@ impl Ciphertext {
         let mut cipher = Cipher::new(key);
         let mut cbc = modes::CBC::new(&mut cipher, iv);
         cbc.decrypt(cipher_text)
+    }
+
+    fn decrypt_with_ctr(key: &[u8], cipher_text: &[u8], nonce: u64) -> Vec<u8> {
+        let mut cipher = Cipher::new(key);
+        let mut ctr = modes::CTR::new(&mut cipher, nonce);
+        ctr.decrypt(cipher_text)
     }
 
     fn decrypt_raw(key: &[u8], cipher_text: &[u8]) -> Vec<u8> {
@@ -140,6 +160,7 @@ pub fn encrypt(key: &[u8], plain_text: &[u8], mode: Mode, padding: Padding) -> V
     let bytes = match &mode {
         Mode::ECB => Ciphertext::encrypt_with_ecb(key, &padded_plain_text),
         Mode::CBC { iv } => Ciphertext::encrypt_with_cbc(key, &padded_plain_text, iv),
+        Mode::CTR { nonce } => Ciphertext::encrypt_with_ctr(key, &padded_plain_text, *nonce),
         Mode::None => Ciphertext::encrypt_raw(key, &padded_plain_text),
     };
     bytes
@@ -149,6 +170,7 @@ pub fn decrypt(key: &[u8], cipher_text: &[u8], mode: Mode, padding: Padding) -> 
     let plain_text = match &mode {
         Mode::ECB => Ciphertext::decrypt_with_ecb(key, &cipher_text),
         Mode::CBC { iv } => Ciphertext::decrypt_with_cbc(key, &cipher_text, iv),
+        Mode::CTR { nonce } => Ciphertext::decrypt_with_ctr(key, &cipher_text, *nonce),
         Mode::None => Ciphertext::decrypt_raw(key, &cipher_text),
     };
     unpad(&padding, &plain_text).unwrap()

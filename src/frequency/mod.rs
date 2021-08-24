@@ -1,41 +1,70 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::iter::FromIterator;
 type Score = f32;
+
+pub const LETTER_BY_FREQUENCY: [(char, u8); 26] = [
+    ('e', 26),
+    ('t', 25),
+    ('a', 24),
+    ('o', 23),
+    ('i', 22),
+    ('n', 21),
+    ('s', 20),
+    ('r', 19),
+    ('h', 18),
+    ('l', 17),
+    ('d', 16),
+    ('c', 15),
+    ('u', 14),
+    ('m', 13),
+    ('f', 12),
+    ('p', 11),
+    ('g', 10),
+    ('w', 9),
+    ('y', 8),
+    ('b', 7),
+    ('v', 6),
+    ('k', 5),
+    ('x', 4),
+    ('j', 3),
+    ('q', 2),
+    ('z', 1),
+];
+
+pub fn commonth_byte(ciphertext: &[u8]) -> Vec<(&u8, usize)> {
+    let mut counts = BTreeMap::new();
+    for byte in ciphertext.iter() {
+        *counts.entry(byte).or_insert(0) += 1;
+    }
+
+    let mut v = Vec::from_iter(counts.into_iter());
+    v.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+    v
+}
+
+pub fn triagrams_present(ascii_text: &str) -> Score {
+    if ascii_text.contains("the") {
+        return 13.0;
+    } else if ascii_text.contains("and") {
+        return 12.0;
+    } else if ascii_text.contains("tha") {
+        return 11.0;
+    } else if ascii_text.contains("ent") {
+        return 10.0;
+    } else if ascii_text.contains("ing") {
+        return 9.0;
+    } else if ascii_text.contains("ion") {
+        return 8.0;
+    }
+    return 0.0;
+}
 
 /// Given an ASCII Text, return a Score.
 /// The higher the score, the more likely the
 /// text is in English.
 pub fn analysis(ascii_text: &str) -> Score {
     // set the letter frequency table.
-    let letter_by_frequency: HashMap<char, u8> = vec![
-        ('e', 26),
-        ('t', 25),
-        ('a', 24),
-        ('o', 23),
-        ('i', 22),
-        ('n', 21),
-        ('s', 20),
-        ('r', 19),
-        ('h', 18),
-        ('l', 17),
-        ('d', 16),
-        ('c', 15),
-        ('u', 14),
-        ('m', 13),
-        ('f', 12),
-        ('p', 11),
-        ('g', 10),
-        ('w', 9),
-        ('y', 8),
-        ('b', 7),
-        ('v', 6),
-        ('k', 5),
-        ('x', 4),
-        ('j', 3),
-        ('q', 2),
-        ('z', 1),
-    ]
-    .into_iter()
-    .collect();
+    let letter_by_frequency: HashMap<char, u8> = LETTER_BY_FREQUENCY.to_vec().into_iter().collect();
     let ascii_text: Vec<char> = ascii_text
         .chars()
         .filter(|c| {

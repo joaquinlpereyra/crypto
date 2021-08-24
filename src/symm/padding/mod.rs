@@ -1,4 +1,5 @@
 /// A collection of padding algorithms.
+#[derive(Clone)]
 pub enum Padding {
     PKCS7,
     None,

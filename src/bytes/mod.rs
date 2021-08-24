@@ -9,6 +9,10 @@ pub fn repeating_xor(bigger: &[u8], smaller: &[u8]) -> Vec<u8> {
     result
 }
 
+pub fn xor(v: &[u8], vv: &[u8]) -> Vec<u8> {
+    repeating_xor(v, vv)
+}
+
 // Return an UTF8 encoded string from the bytes,
 // if it can.
 pub fn to_string(bytes: &[u8]) -> Option<String> {

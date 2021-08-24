@@ -1,41 +1,131 @@
+use crypto::bytes;
+use crypto::encoding::base64;
+use crypto::frequency;
+use crypto::random;
+use crypto::symm::{self, padding::Padding, Ciphertext, Mode};
+use std::collections::HashMap;
+use std::{fs, str};
+
+/// No. 17
+pub fn cbc_padding_oracle() {
+    for _ in 0..100 {
+        cbc_padding_oracle::attack()
+    }
+}
+
+/// No. 18
+pub fn implement_ctr() {
+    let raw_ciphertext =
+        base64::decode("L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==")
+            .unwrap();
+    let ciphertext =
+        Ciphertext::from_existing(raw_ciphertext, Mode::CTR { nonce: 0 }, Padding::None);
+    let plaintext = ciphertext.decrypt("YELLOW_SUBMARINE".as_bytes());
+    println!("{}", str::from_utf8(&plaintext).unwrap());
+}
+
+/// No. 19 / No. 20
+pub fn break_fixed_nonce_ctr() {
+    let key = random::get_random(16);
+
+    // Encrypt all plaintexts badly, with a fixed zero nonce and
+    // join them into a big vector of bytes
+    let ciphertexts: Vec<Ciphertext> = fs::read_to_string("./19.txt")
+        .expect("file 19.txt not found")
+        .lines()
+        .map(|l| base64::decode(l).expect("could not decode b64"))
+        .map(|decoded| Ciphertext::new(&key, &decoded, Mode::CTR { nonce: 0 }, Padding::None))
+        .collect();
+
+    // It is effectively easy to see that his sucks. I'm encrypting doing
+    // plaintext[0..16]  XOR AES(00000000_00000000, key) |
+    // plaintext[16..32] XOR AES(00000000_10000000, key) |
+    // etc et
+    //
+    // So if P is plaintext, C ciphertext and KS the keystream and i is each byte
+    // P[i] XOR KS[i] = C[i]
+    // C[i] XOR P[i] = KS[i]
+    // C[i] XOR KS[i] = P[i]
+    //
+    // We know C[i]. And we can guess KS[i] by using the ciphertexts. All KS[i] are equal!
+    // I can use my statical analysis to find ocurrences of common bytes
+    //
+    // We will try to see which bytes contain valid ASCII
+    for b in 0..32 {
+        println!("Guess for byte number: {}", b);
+        let ciphertexts_bytes_nth = ciphertexts
+            .clone()
+            .into_iter()
+            .map(|ct| ct.bytes[b])
+            .collect::<Vec<u8>>();
+        for i in 0..=255 {
+            let guess_keystream = vec![i; 16];
+            let plaintext_try = bytes::xor(&ciphertexts_bytes_nth, &guess_keystream);
+            // println!("{:?}", String::from_utf8_lossy(&plaintext_try.clone()));
+            let utf8 = match String::from_utf8(plaintext_try) {
+                Ok(txt) => txt,
+                Err(_) => continue,
+            };
+            if frequency::analysis(&utf8) > 0.01
+                && utf8.chars().all(|c| {
+                    c.is_alphanumeric()
+                        || c.is_whitespace()
+                        || c == ','
+                        || c == '.'
+                        || c == ':'
+                        || c == ';'
+                        || c == '\''
+                        || c == '?'
+                        || c == '!'
+                        || c == '\n'
+                })
+            {
+                println!("{:2X?} -> {:?}", guess_keystream, utf8);
+            }
+        }
+    }
+    // After a lot of effort joining strings you can read the poem.
+    // https://www.poetryfoundation.org/poems/43289/easter-1916
+    // I have met?them? at closed?
+    // Coming wit?viv?d
+    // From count?r or
+}
+
+/// No 21
+pub fn implement_mt19937_mersenne_twister() {}
+
 #[allow(dead_code)]
-pub mod cbc_padding_oracle {
+mod cbc_padding_oracle {
     use crypto::encoding::base64;
     use crypto::random;
     use crypto::symm::padding::{unpad, Padding};
     use crypto::symm::{Ciphertext, Mode};
-    use std::str;
-
-    const TEXTS: [&str; 10] = [
-        "MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc=", // Exactly 3 blocks long... when encrypted will have 4
-        "MDAwMDAxV2l0aCB0aGUgYmFzcyBraWNrZWQgaW4gYW5kIHRoZSBWZWdhJ3MgYXJlIHB1bXBpbic=",
-        "MDAwMDAyUXVpY2sgdG8gdGhlIHBvaW50LCB0byB0aGUgcG9pbnQsIG5vIGZha2luZw==",
-        "MDAwMDAzQ29va2luZyBNQydzIGxpa2UgYSBwb3VuZCBvZiBiYWNvbg==",
-        "MDAwMDA0QnVybmluZyAnZW0sIGlmIHlvdSBhaW4ndCBxdWljayBhbmQgbmltYmxl",
-        "MDAwMDA1SSBnbyBjcmF6eSB3aGVuIEkgaGVhciBhIGN5bWJhbA==",
-        "MDAwMDA2QW5kIGEgaGlnaCBoYXQgd2l0aCBhIHNvdXBlZCB1cCB0ZW1wbw==",
-        "MDAwMDA3SSdtIG9uIGEgcm9sbCwgaXQncyB0aW1lIHRvIGdvIHNvbG8=",
-        "MDAwMDA4b2xsaW4nIGluIG15IGZpdmUgcG9pbnQgb2g=",
-        "MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93",
-    ];
+    use std::{fs, str};
 
     struct Server {
+        texts: Vec<String>,
         key: Vec<u8>,
     }
 
     impl Server {
         pub fn new() -> Server {
+            let texts: Vec<String> = fs::read_to_string("./17.txt")
+                .expect("file 17.txt not found")
+                .lines()
+                .map(|l| l.to_owned())
+                .collect::<Vec<String>>();
             Server {
                 key: random::get_random(16),
+                texts,
             }
         }
 
-        fn select_at_random() -> String {
-            return TEXTS[random::in_range(0, 10)].to_string();
+        fn select_at_random(&self) -> String {
+            return self.texts[random::in_range(0, 10)].to_string();
         }
 
         pub fn give_ciphertext(&self) -> Ciphertext {
-            let text = Server::select_at_random();
+            let text = self.select_at_random();
             let iv = random::get_random(16);
 
             Ciphertext::new(
