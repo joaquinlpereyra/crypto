@@ -6,7 +6,12 @@ type Result<T> = result::Result<T, Box<dyn error::Error>>;
 
 pub fn get_random(bytes: usize) -> Vec<u8> {
     let mut source = Urandom::new().unwrap();
-    source.get(bytes).unwrap()
+    source
+        .get(bytes)
+        .unwrap()
+        .into_iter()
+        .map(|b| b as u8)
+        .collect()
 }
 
 pub fn in_range(floor: usize, ceiling: usize) -> usize {
@@ -73,14 +78,31 @@ pub struct MersenneTwister {
 }
 
 impl MersenneTwister {
-    pub fn new(seed: usize) -> Self {
+    pub fn new(seed: u32) -> Self {
+        // stop this nonsense of converting every number
+        // right at the beginning. u32 is just for users
+        // to know limits. in the twister everything
+        // is usize.
+        let seed = seed as usize;
+        let f = 1812433253;
+        let w = 32;
+        let d = 0xFFFFFFFF;
+
+        let mut state = vec![seed; 624];
+        for i in 1..state.len() {
+            let prev = state[i - 1];
+            state[i] = (f * (prev ^ (prev >> (w - 2))) + i) & d;
+        }
+        Self::new_from_state(state)
+    }
+
+    pub fn new_from_state(state: Vec<usize>) -> Self {
         let (w, n, m, r) = (32, 624, 397, 31);
         let (u, d) = (11, 0xFFFFFFFF);
         let (s, b) = (7, 0x9D2C5680);
         let (t, c) = (15, 0xEFC60000);
         let a = 0x9908B0DF;
         let l = 18;
-        let f = 1812433253;
 
         // lower mask will get the least
         // signifcant r bits
@@ -89,12 +111,6 @@ impl MersenneTwister {
         // upper mask will get the most significant
         // w - r bits
         let upper_mask = ((1 << (w - r)) - 1) << (w - 1);
-
-        let mut state = vec![seed; n];
-        for i in 1..state.len() {
-            let prev = state[i - 1];
-            state[i] = (f * (prev ^ (prev >> (w - 2))) + i) & d;
-        }
 
         Self {
             n,
@@ -109,6 +125,40 @@ impl MersenneTwister {
             l,
             state,
             index: n, // force twist() on first call to next()
+            lower_mask,
+            upper_mask,
+        }
+    }
+
+    pub fn new_from_twisted_state(state: Vec<usize>) -> Self {
+        let (w, n, m, r) = (32, 624, 397, 31);
+        let (u, d) = (11, 0xFFFFFFFF);
+        let (s, b) = (7, 0x9D2C5680);
+        let (t, c) = (15, 0xEFC60000);
+        let a = 0x9908B0DF;
+        let l = 18;
+
+        // lower mask will get the least
+        // signifcant r bits
+        let lower_mask = (1 << r) - 1;
+
+        // upper mask will get the most significant
+        // w - r bits
+        let upper_mask = ((1 << (w - r)) - 1) << (w - 1);
+
+        Self {
+            n,
+            m,
+            a,
+            b,
+            c,
+            s,
+            t,
+            u,
+            d,
+            l,
+            state,
+            index: 0,
             lower_mask,
             upper_mask,
         }
@@ -154,14 +204,21 @@ impl Iterator for MersenneTwister {
             self.twist();
         }
 
-        let mut y = self.state[self.index];
-        y = y ^ ((y >> self.u) & self.d);
-        y = y ^ ((y << self.s) & self.b);
-        y = y ^ ((y << self.t) & self.c);
-        y = y ^ (y >> self.l);
+        let y = self.state[self.index];
+        println!("[MT] y: {}", y);
+        let y1 = y ^ ((y >> self.u) & self.d);
+        println!("[MT] y1 = y ^ ((y << u) & d): {}", y1);
+        let y2 = y1 ^ ((y1 << self.s) & self.b);
+        println!("[MT] y2 = y1 ^ ((y1 << s) & b): {}", y2);
+        let y3 = y2 ^ ((y2 << self.t) & self.c);
+        println!("[MT] y3 = y2 ^ ((y2 << t) & c): {}", y3);
+        let output = y3 ^ (y3 >> self.l);
+        println!("[MT] output = y3 ^ (y3 >> l): {}", output);
+
+        println!("[MT] OUTPUT: {}", output);
 
         self.index += 1;
-        Some(y)
+        Some(output)
     }
 }
 
@@ -181,7 +238,7 @@ mod tests {
 
         for (i, line) in lines.enumerate() {
             let expected: usize = line.parse()?;
-            let got = mersenne.next();
+            let got = mersenne.next().unwrap();
             assert_eq!(expected, got, "at {}", i);
         }
         Ok(())
