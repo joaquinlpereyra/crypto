@@ -1,6 +1,6 @@
 use crypto::encoding::{base64, hex};
 use crypto::symm::padding::Padding;
-use crypto::symm::Ciphertext;
+use crypto::symm::AESCiphertext;
 use crypto::{random, symm};
 use std::collections::HashMap;
 use std::fs::read_to_string;
@@ -57,7 +57,7 @@ pub fn cbc_ecb_oracle() {
         };
         let mode_str = format!("{}", &mode);
         (
-            Ciphertext::new(&random_key, &pretext, mode, Padding::PKCS7).bytes,
+            AESCiphertext::new(&random_key, &pretext, mode, Padding::PKCS7).bytes,
             mode_str,
         )
     }
@@ -106,7 +106,7 @@ pub fn byte_at_a_time_ecb_decryption() {
 
         let text_to_encrypt = user_input.to_owned() + secret_message;
 
-        let cipher_text = Ciphertext::new(
+        let cipher_text = AESCiphertext::new(
             &random_key,
             text_to_encrypt.as_bytes(),
             symm::Mode::ECB,
@@ -237,7 +237,7 @@ pub fn ecb_cut_and_paste() {
 
     let email = (email.to_owned() + admin) + str::from_utf8(&pad).unwrap();
     let profile = profile_for(&email);
-    let first_cipher_text = Ciphertext::new(
+    let first_cipher_text = AESCiphertext::new(
         &random_key,
         profile.as_bytes(),
         symm::Mode::ECB,
@@ -250,7 +250,7 @@ pub fn ecb_cut_and_paste() {
     // "email=&uid=10&role=user"
     // we need to push it to exactly 36 bytes (so only the user word is in the third block)
     let profile = profile_for(&"1".repeat(13));
-    let second_cipher_text = Ciphertext::new(
+    let second_cipher_text = AESCiphertext::new(
         &random_key,
         profile.as_bytes(),
         symm::Mode::ECB,
@@ -262,7 +262,8 @@ pub fn ecb_cut_and_paste() {
     let mut copy_pasted_buf = Vec::new();
     copy_pasted_buf.extend_from_slice(&second_cipher_text.bytes[0..32]);
     copy_pasted_buf.extend_from_slice(admin);
-    let copy_pasted = Ciphertext::from_existing(copy_pasted_buf, symm::Mode::ECB, Padding::PKCS7);
+    let copy_pasted =
+        AESCiphertext::from_existing(copy_pasted_buf, symm::Mode::ECB, Padding::PKCS7);
     let decrypted = copy_pasted.decrypt(&random_key);
     let decoded = User::new(str::from_utf8(&decrypted).unwrap());
     println!("{:?}", decoded)
@@ -284,7 +285,8 @@ pub fn byte_at_a_time_ecb_decryption_hard() {
         let mut plaintext = random_prefix.clone();
         plaintext.extend_from_slice(text_to_encrypt.as_bytes());
 
-        let cipher_text = Ciphertext::new(&random_key, &plaintext, symm::Mode::ECB, Padding::PKCS7);
+        let cipher_text =
+            AESCiphertext::new(&random_key, &plaintext, symm::Mode::ECB, Padding::PKCS7);
         return cipher_text.bytes;
     };
 
@@ -433,7 +435,7 @@ pub fn cbc_bitflipping_attacks() {
         let last_chunk = ";comment2=%20like%20a%20pound%20of%20bacon";
 
         let plain_text = first_chunk + &ok_input + last_chunk;
-        let cipher_text = Ciphertext::new(
+        let cipher_text = AESCiphertext::new(
             &random_key,
             plain_text.as_bytes(),
             symm::Mode::CBC { iv: iv.clone() },
@@ -443,7 +445,7 @@ pub fn cbc_bitflipping_attacks() {
     };
 
     let decrypt_and_check_admin = |cipher_text: &[u8]| -> bool {
-        let plain = symm::decrypt(
+        let plain = symm::aes_decrypt(
             &random_key,
             &cipher_text,
             symm::Mode::CBC { iv: iv.clone() },
@@ -518,7 +520,7 @@ pub fn cbc_bitflipping_attacks() {
     cipher_break[18] ^= 0b0000_0001;
     cipher_break[24] ^= 0b0000_0001;
     println!("{:?}", &cipher_break);
-    let plain = symm::decrypt(
+    let plain = symm::aes_decrypt(
         &random_key,
         &cipher_break,
         symm::Mode::CBC { iv: iv.clone() },

@@ -202,7 +202,7 @@ impl Cipher {
     }
 }
 
-impl modes::Cipher for Cipher {
+impl modes::BlockCipher for Cipher {
     fn set_state(&mut self, state: &[u8]) {
         self.set_state(state)
     }

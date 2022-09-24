@@ -18,5 +18,7 @@ fn main() {
     // second_set::cbc_bitflipping_attacks();
     // third_set::cbc_padding_oracle();
     // third_set::implement_ctr();
-    third_set::break_fixed_nonce_ctr();
+    // third_set::break_fixed_nonce_ctr();
+    // third_set::clone_mt19937_from_output();
+    third_set::create_mt1993_stream_cipher_break_it();
 }

@@ -1,5 +1,5 @@
 /// A cipher according to modes.
-pub trait Cipher {
+pub trait BlockCipher {
     fn set_state(&mut self, state: &[u8]);
     fn encrypt(&mut self) -> Vec<u8>;
     fn decrypt(&mut self) -> Vec<u8>;
@@ -12,7 +12,7 @@ pub trait Cipher {
 /// Operation on the ECB mode require a working block cipher
 /// and do not assume the plain or cipher text to be padded.
 pub struct ECB<'a> {
-    cipher: &'a mut dyn Cipher,
+    cipher: &'a mut dyn BlockCipher,
     block_size: usize,
 }
 
@@ -22,7 +22,7 @@ fn xor(x: &[u8], y: &[u8]) -> Vec<u8> {
 }
 
 impl<'a> ECB<'a> {
-    pub fn new(cipher: &'a mut dyn Cipher) -> ECB<'a> {
+    pub fn new(cipher: &'a mut dyn BlockCipher) -> ECB<'a> {
         let block_size = cipher.get_block_size();
         ECB { cipher, block_size }
     }
@@ -51,13 +51,13 @@ impl<'a> ECB<'a> {
 }
 
 pub struct CBC<'a> {
-    cipher: &'a mut dyn Cipher,
+    cipher: &'a mut dyn BlockCipher,
     block_size: usize,
     iv: &'a [u8],
 }
 
 impl<'a> CBC<'a> {
-    pub fn new(cipher: &'a mut dyn Cipher, iv: &'a [u8]) -> CBC<'a> {
+    pub fn new(cipher: &'a mut dyn BlockCipher, iv: &'a [u8]) -> CBC<'a> {
         let block_size = cipher.get_block_size();
         if block_size != iv.len() {
             panic!("IV must be the safe length as the block of the cipher");
@@ -105,7 +105,7 @@ impl<'a> CBC<'a> {
 }
 
 pub struct CTR<'a> {
-    cipher: &'a mut dyn Cipher,
+    cipher: &'a mut dyn BlockCipher,
     block_size: usize,
     // counter format:
     // 8 bytes little endian arbitrary nonce
@@ -115,7 +115,7 @@ pub struct CTR<'a> {
 }
 
 impl<'a> CTR<'a> {
-    pub fn new(cipher: &'a mut dyn Cipher, nonce: u64) -> CTR<'a> {
+    pub fn new(cipher: &'a mut dyn BlockCipher, nonce: u64) -> CTR<'a> {
         let block_size = cipher.get_block_size();
         let counter_int = 0;
         let counter = Self::new_counter(nonce);

@@ -1,7 +1,7 @@
 use crypto::encoding::{base64, hex};
 use crypto::frequency;
 use crypto::symm::padding::{self, Padding};
-use crypto::symm::Ciphertext;
+use crypto::symm::AESCiphertext;
 use crypto::{bytes, symm};
 use std::collections::HashMap;
 use std::fs::{read_to_string, File};
@@ -77,8 +77,8 @@ pub fn decrypt_yellow_submarine() {
     let cipher_text = base64::decode(&cipher_text).unwrap();
     let cipher_key = "YELLOW SUBMARINE".as_bytes();
 
-    let plain =
-        Ciphertext::from_existing(cipher_text, symm::Mode::ECB, Padding::None).decrypt(&cipher_key);
+    let plain = AESCiphertext::from_existing(cipher_text, symm::Mode::ECB, Padding::None)
+        .decrypt(&cipher_key);
     let plain_ascii = str::from_utf8(&plain).unwrap();
     print!("{}", plain_ascii);
 }
@@ -127,7 +127,7 @@ pub fn decrypt_with_cbc() {
     let cipher_text = cipher_text.replace("\n", "");
     let cipher_text = base64::decode(&cipher_text).unwrap();
     let cbc = symm::Mode::CBC { iv };
-    let plain = symm::Ciphertext::from_existing(cipher_text, cbc, Padding::None).decrypt(&key);
+    let plain = symm::AESCiphertext::from_existing(cipher_text, cbc, Padding::None).decrypt(&key);
     let plain_str = str::from_utf8(&plain).unwrap();
     println!("{}", plain_str);
 }

@@ -54,7 +54,7 @@ impl Random for Urandom {
 
     fn get(&mut self, bytes: usize) -> Result<Vec<usize>> {
         let mut randoms = vec![0; bytes];
-        &self.file.read_exact(&mut randoms)?;
+        let _ = &self.file.read_exact(&mut randoms)?;
         Ok(randoms.into_iter().map(|i| i as usize).collect())
     }
 }
@@ -205,17 +205,10 @@ impl Iterator for MersenneTwister {
         }
 
         let y = self.state[self.index];
-        println!("[MT] y: {}", y);
         let y1 = y ^ ((y >> self.u) & self.d);
-        println!("[MT] y1 = y ^ ((y << u) & d): {}", y1);
         let y2 = y1 ^ ((y1 << self.s) & self.b);
-        println!("[MT] y2 = y1 ^ ((y1 << s) & b): {}", y2);
         let y3 = y2 ^ ((y2 << self.t) & self.c);
-        println!("[MT] y3 = y2 ^ ((y2 << t) & c): {}", y3);
         let output = y3 ^ (y3 >> self.l);
-        println!("[MT] output = y3 ^ (y3 >> l): {}", output);
-
-        println!("[MT] OUTPUT: {}", output);
 
         self.index += 1;
         Some(output)
