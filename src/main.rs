@@ -19,6 +19,7 @@ fn main() {
     // third_set::cbc_padding_oracle();
     // third_set::implement_ctr();
     // third_set::break_fixed_nonce_ctr();
+    third_set::crack_mt19937_seed();
     // third_set::clone_mt19937_from_output();
-    third_set::create_mt1993_stream_cipher_break_it();
+    // third_set::create_mt1993_stream_cipher_break_it();
 }

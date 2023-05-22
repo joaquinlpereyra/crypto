@@ -5,6 +5,7 @@ use crypto::{random, symm};
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::str;
+
 #[allow(dead_code)]
 pub fn cbc_ecb_oracle() {
     /*
