@@ -16,3 +16,5 @@ Notation
 - Nb is the number of columns in a block. Constant. 4
 - Nk is the number of words in the key. Either 4, 6 or 8.
 - Nr is the number of rounds.
+
+I still have to do more research.
